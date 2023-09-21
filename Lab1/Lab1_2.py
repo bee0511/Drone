@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 ENLARGE_SIZE = 3
-filename = './Lena_52x52.jpg'
+filename = './test.jpg'
 
 img = cv2.imread(filename)
 
@@ -22,3 +22,5 @@ cv2.moveWindow(winname, 40, 30)  # Move it to (40,30)
 cv2.imshow(winname, new_img)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
+
+cv2.imwrite('NearestNeighbor.jpg', new_img)
