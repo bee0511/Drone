@@ -1,6 +1,7 @@
 import cv2
 import time
 import numpy as np
+from djitellopy import Tello
 
 
 class Calibration:
@@ -45,3 +46,16 @@ class Calibration:
         self.camera_matrix = camera_matrix
 
         return (camera_matrix, distortion_coeffs)
+    
+if __name__ == '__main__':
+    drone = Tello()
+    drone.connect()
+    drone.streamon()
+    
+    cali = Calibration(drone)
+    cameraMatrix, distCoeffs = cali.do_cali()
+
+    f = cv2.FileStorage("calibrate.xml", cv2.FILE_STORAGE_WRITE)
+    f.write("intrinsic", cameraMatrix)
+    f.write("distortion", distCoeffs)
+    f.release()
