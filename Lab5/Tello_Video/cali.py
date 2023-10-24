@@ -10,19 +10,19 @@ class Calibration:
     ZERO_ZONE = (-1, -1)
     CRITERIA = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.1)
 
-    def __init__(self, drone):
+    def __init__(self):
         self.object_points = []
         self.img_points = []
-        self.camera_matrix, self.distortion_coeffs = None
-        self.drone = drone
+        self.camera_matrix, self.distortion_coeffs = None, None
 
-    def do_cali(self):
+    def do_cali(self, frame_read):
         object_point = np.zeros((9 * 6, 3), np.float32)
         object_point[:, :2] = np.mgrid[0:9, 0:6].T.reshape(-1, 2)
+        
 
         while(len(self.object_points) < 50):
-            frame_read = self.drone.get_frame_read()
             frame = frame_read.frame
+            cv2.imshow('frame', frame)
             grayed_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             retCorner, corners = cv2.findChessboardCorners(grayed_frame, (self.NX, self.NY), None)
 
@@ -30,10 +30,12 @@ class Calibration:
                 corner2 = cv2.cornerSubPix(grayed_frame, corners, self.WIN_SIZE, self.ZERO_ZONE, self.CRITERIA)
                 self.object_points.append(object_point.copy())
                 self.img_points.append(corner2)
+                cv2.drawChessboardCorners(grayed_frame, (self.NX, self.NY), corners, True)
                 cv2.imshow('grayed_frame', grayed_frame)
-                cv2.drawChessboardCorners(grayed_frame, (self.NX, self.NY), corners, ret)
-                cv2.waitKey(100)
-            time.sleep(0.1)
+                print('[*] Captured Object', len(self.object_points))
+                
+            cv2.waitKey(100)
+
         ret, camera_matrix, distortion_coeffs, rvecs, tvecs = cv2.calibrateCamera(
             self.object_points,
             self.img_points, 
@@ -51,11 +53,13 @@ if __name__ == '__main__':
     drone = Tello()
     drone.connect()
     drone.streamon()
-    
-    cali = Calibration(drone)
-    cameraMatrix, distCoeffs = cali.do_cali()
+    frame_read = drone.get_frame_read()
+    cali = Calibration()
+    cameraMatrix, distCoeffs = cali.do_cali(frame_read)
 
     f = cv2.FileStorage("calibrate.xml", cv2.FILE_STORAGE_WRITE)
     f.write("intrinsic", cameraMatrix)
     f.write("distortion", distCoeffs)
     f.release()
+    
+    drone.streamoff()

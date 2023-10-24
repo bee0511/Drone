@@ -15,9 +15,12 @@ def main():
         print("Do calibrate first.")
         exit(1)
 
-    f = cv2.FileStorage("calibrate.xml", cv2.FILE_STORAGE_WRITE)
+    f = cv2.FileStorage("calibrate.xml", cv2.FILE_STORAGE_READ)
     intrinsic = f.getNode("intrinsic").mat()
     distortion = f.getNode("distortion").mat()
+    
+    print(intrinsic)
+    print(distortion)
 
     # Tello SDK
     drone = Tello()
@@ -33,12 +36,16 @@ def main():
     while True:
         frame = frame_read.frame
         
-        cv2.imshow("drone", frame)
         markerCorners, markerIds, rejectedCandidates = cv2.aruco.detectMarkers(frame, dictionary, parameters=parameters)
-        frame = cv2.aruco.drawDetectedMarkers(frame, markerCorners, markerIds)
+        modified_frame = cv2.aruco.drawDetectedMarkers(frame, markerCorners, markerIds)
         rvec, tvec, _objPoints = cv2.aruco.estimatePoseSingleMarkers(markerCorners, 15, intrinsic, distortion) 
-        frame = cv2.aruco.drawAxis(frame, intrinsic, distortion, rvec, tvec, 0.1)
-
+        if np.array(rvec).ndim == 0:
+            cv2.imshow("drone", modified_frame)
+            key = cv2.waitKey(33)
+            continue
+        cv2.putText()
+        modified_frame = cv2.aruco.drawAxis(modified_frame, intrinsic, distortion, rvec, tvec, 0.1)
+        cv2.imshow("drone", modified_frame)
         key = cv2.waitKey(33)
 
     #cv2.destroyAllWindows()
