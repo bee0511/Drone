@@ -31,7 +31,7 @@ def main():
     # Load the predefined dictionary 
     dictionary = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
     # Initialize the detector parameters using default values
-    parameters = cv2.aruco.DetectorParameters_create()
+    parameters = cv2 .aruco.DetectorParameters_create()
 
     while True:
         frame = frame_read.frame
@@ -43,8 +43,19 @@ def main():
             cv2.imshow("drone", modified_frame)
             key = cv2.waitKey(33)
             continue
-        cv2.putText()
-        modified_frame = cv2.aruco.drawAxis(modified_frame, intrinsic, distortion, rvec, tvec, 0.1)
+        
+        for i in range(rvec.shape[0]):
+            modified_frame = cv2.aruco.drawAxis(modified_frame, intrinsic, distortion, rvec[i,:,:], tvec[i,:,:], 10)
+            cv2.putText(
+                frame,
+                f'x = {tvec[0,0,0]}, y = {tvec[0,0,1]}, z = {tvec[0,0,2]}',
+                (100, 100), 
+                cv2.FONT_HERSHEY_SIMPLEX, 
+                0.4, 
+                (0, 255, 0),
+                2,
+                cv2.LINE_AA)
+
         cv2.imshow("drone", modified_frame)
         key = cv2.waitKey(33)
 

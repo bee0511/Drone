@@ -3,3 +3,4 @@
 *.zip
 *.xml
 test.py
+__pycache__

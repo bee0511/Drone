@@ -34,7 +34,7 @@ class Calibration:
                 cv2.imshow('grayed_frame', grayed_frame)
                 print('[*] Captured Object', len(self.object_points))
                 
-            cv2.waitKey(100)
+            cv2.waitKey(300)
 
         ret, camera_matrix, distortion_coeffs, rvecs, tvecs = cv2.calibrateCamera(
             self.object_points,
