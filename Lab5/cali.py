@@ -18,23 +18,22 @@ class Calibration:
     def do_cali(self, frame_read):
         object_point = np.zeros((9 * 6, 3), np.float32)
         object_point[:, :2] = np.mgrid[0:9, 0:6].T.reshape(-1, 2)
-        
+        key = -1
 
-        while(len(self.object_points) < 50):
+        while len(self.object_points) < 12:
             frame = frame_read.frame
             cv2.imshow('frame', frame)
             grayed_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             retCorner, corners = cv2.findChessboardCorners(grayed_frame, (self.NX, self.NY), None)
-
-            if retCorner:
+            if retCorner and key != -1:
                 corner2 = cv2.cornerSubPix(grayed_frame, corners, self.WIN_SIZE, self.ZERO_ZONE, self.CRITERIA)
                 self.object_points.append(object_point.copy())
                 self.img_points.append(corner2)
                 cv2.drawChessboardCorners(grayed_frame, (self.NX, self.NY), corners, True)
                 cv2.imshow('grayed_frame', grayed_frame)
                 print('[*] Captured Object', len(self.object_points))
-                
-            cv2.waitKey(300)
+                # cv2.imwrite(f'./saved_{str(self.object_points)}.png', grayed_frame)
+            key = cv2.waitKey(50)
 
         ret, camera_matrix, distortion_coeffs, rvecs, tvecs = cv2.calibrateCamera(
             self.object_points,

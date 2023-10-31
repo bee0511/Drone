@@ -1,6 +1,6 @@
 def keyboard(self, key):
     #global is_flying
-    print("key:", key)
+    # print("key:", key)
     fb_speed = 40
     lf_speed = 40
     ud_speed = 50
