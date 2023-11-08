@@ -1,6 +1,6 @@
 /venv
 /venv_desktop
 *.zip
-*.xml
+Lab[!7]/*.xml
 test.py
 __pycache__

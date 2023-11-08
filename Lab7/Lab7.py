@@ -10,6 +10,7 @@ from enum import Enum
 
 
 MAX_SPEED_THRESHOLD = 25
+CALIBRATE_FILE = "calibrate-best.xml"
 
 pid_controller_x = PID(kP=0.7, kI=0.0001, kD=0.1)
 pid_controller_y = PID(kP=0.5, kI=0.0001, kD=0.1)
@@ -23,11 +24,11 @@ dictionary = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
 parameters = cv2.aruco.DetectorParameters_create()
 
 # Check calibration file exists
-if not os.path.isfile("calibrate.xml"):
+if not os.path.isfile(CALIBRATE_FILE):
     print("Do calibrate first.")
     exit(1)
 
-f = cv2.FileStorage("calibrate-best.xml", cv2.FILE_STORAGE_READ)
+f = cv2.FileStorage(CALIBRATE_FILE, cv2.FILE_STORAGE_READ)
 intrinsic = f.getNode("intrinsic").mat()
 distortion = f.getNode("distortion").mat()
 
