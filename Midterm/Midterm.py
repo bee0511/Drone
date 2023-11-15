@@ -45,6 +45,15 @@ def clamping(val):
     return int(val)
 
 
+def clamping0(val):
+    MAX_SPEED_THRESHOLD_0 = 40
+    if val > MAX_SPEED_THRESHOLD_0:
+        return MAX_SPEED_THRESHOLD_0
+    elif val < -MAX_SPEED_THRESHOLD_0:
+        return -MAX_SPEED_THRESHOLD_0
+    return int(val)
+
+
 def tracking_aruco0(frame, marker_id, z_distance):
     markerCorners, markerIds, rejectedCandidates = cv2.aruco.detectMarkers(
         frame, dictionary, parameters=parameters
@@ -99,10 +108,10 @@ def tracking_aruco0(frame, marker_id, z_distance):
             y_error = tvec[0, 0, 1] - K_Y_DOWNWARD_BOOST
         z_error = tvec[0, 0, 2] - z_distance
 
-        x_update = clamping(pid_controller_x.update(x_error, sleep=0))
-        y_update = clamping(pid_controller_y.update(y_error, sleep=0))
-        z_update = clamping(pid_controller_z.update(z_error, sleep=0))
-        yaw_update = clamping(yaw_controller_pid.update(yaw_error, sleep=0))
+        x_update = clamping0(pid_controller_x.update(x_error, sleep=0))
+        y_update = clamping0(pid_controller_y.update(y_error, sleep=0))
+        z_update = clamping0(pid_controller_z.update(z_error, sleep=0))
+        yaw_update = clamping0(yaw_controller_pid.update(yaw_error, sleep=0))
         yaw_update = -(yaw_update + 7)
         # print("[DEBUG][NOTCLAMP] ", ypr)
         # print(
@@ -227,6 +236,7 @@ def main():
                 keyboard(drone, key)
             else:
                 drone.send_rc_control(0, 0, 0, 0)
+                print("[*] Stage 1 but no arcuo 1!")
             cv2.imshow("drone", frame)
             continue
 
@@ -247,14 +257,21 @@ def main():
 
         cv2.imshow("drone", tagged_frame)
 
+    for _ in range(20):
+        frame = frame_read.frame
+        print("[*] Wait for 1 second")
+        drone.send_rc_control(0, 0, 0, 0)
+        cv2.waitKey(50)
+        cv2.imshow("drone", frame)
+
     # Fly over the board
     while True:
         frame = frame_read.frame
         cv2.imshow("drone", frame)
         height = drone.get_height()
-        print("[*] Height:", height)
+        print("[*] Stage 1 fly up height:", height)
         if height < 180:  # Original 160
-            print("[*] Height:", height)
+            print("[*] Stage 1 fly up height:", height)
             drone.send_rc_control(0, 0, 30, 0)
             cv2.waitKey(30)
         else:
@@ -262,9 +279,9 @@ def main():
             cv2.waitKey(2500)
             drone.send_rc_control(0, 0, 0, 0)
             break
-    # Go under to find aruco2
+    # Go down
     while True:
-        print("[*] Go under to find aruco2")
+        print("[*] Stage 2 go down")
         frame = frame_read.frame
         cv2.imshow("drone", frame)
         height = drone.get_height()
@@ -275,60 +292,6 @@ def main():
         else:
             drone.send_rc_control(0, 0, 0, 0)
             break
-
-    pid_controller_x.initialize()
-    pid_controller_y.initialize()
-    pid_controller_z.initialize()
-    yaw_controller_pid.initialize()
-    # for _ in range(5):
-    #     drone.send_rc_control(0, -20, 0, 0)
-    #     cv2.waitKey(50)
-    # Find aruco 2
-    # while True:
-    #     frame = frame_read.frame
-    #     key = cv2.waitKey(50)
-    #     K_TARGET_ID = 2
-    #     packed_data = tracking_aruco(frame, K_TARGET_ID, 60)
-    #     if not packed_data:
-    #         if key != -1:
-    #             keyboard(drone, key)
-    #         else:
-    #             drone.send_rc_control(0, 0, 0, -5)
-    #         cv2.imshow("drone", frame)
-    #         continue
-
-    #     tagged_frame, x_update, y_update, z_update, yaw_update, distance = packed_data
-    #     if key != -1:
-    #         keyboard(drone, key)
-    #     elif x_update and y_update and z_update and yaw_update:  # We see marker
-    #         # drone.send_rc_control(int(x_update), int(z_update), int(y_update), 0)
-    #         drone.send_rc_control(
-    #             int(x_update), int(z_update), int(y_update), int(yaw_update)
-    #         )
-    #         print("[*] Distance:", distance)
-    #         if distance <= 100 and abs(int(x_update)) <= 10:
-    #             break
-
-    #     else:
-    #         drone.send_rc_control(0, 0, 0, 0)
-    #     cv2.imshow("drone", tagged_frame)
-
-    # Go under
-    # while True:
-    #     frame = frame_read.frame
-    #     cv2.imshow("drone", frame)
-    #     height = drone.get_height()
-    #     if height > 30:
-    #         print("[*] Go Under Height:", height)
-    #         drone.send_rc_control(0, 0, -40, 0)
-    #         cv2.waitKey(30)
-    #     else:
-    #         drone.send_rc_control(0, 35, 0, 0)
-    #         print("[*] Fly over...")
-    #         cv2.waitKey(5000)
-    #         drone.send_rc_control(0, 0, 0, 0)
-    #         print("[*] Done fly over")
-    #         break
 
     # Track arcuo 0 & Find arcuo 3
     while True:
@@ -347,15 +310,15 @@ def main():
                 yaw_update,
                 distance,
             ) = arcuo_3_packed
-            if distance <= 100:
-                print("[*] Go to Stage 4! ")
-                print("[*] Spinning...")
-                drone.rotate_clockwise(90)
+            if distance <= 150:
+                print("[*] Go to Stage 4!")
                 break
             if key != -1:
                 keyboard(drone, key)
             elif x_update and y_update and z_update and yaw_update:  # We see marker
-                drone.send_rc_control(0, int(z_update), int(y_update), int(yaw_update))
+                drone.send_rc_control(
+                    int(x_update), int(z_update), int(y_update), int(yaw_update)
+                )
                 print("[*] Distance:", distance)
             else:
                 drone.send_rc_control(0, 0, 0, 0)
@@ -386,6 +349,14 @@ def main():
             drone.send_rc_control(0, 0, 0, 0)
         cv2.imshow("drone", tagged_frame)
 
+    for _ in range(20):
+        drone.send_rc_control(0, 0, 0, 0)
+        cv2.waitKey(50)
+        print("[*] Stage 3 -> 4 wait for 1 second")
+        cv2.imshow("drone", frame)
+    cv2.waitKey(100)
+    drone.rotate_clockwise(80)
+    cv2.imshow("drone", frame)
     # Find arcuo 4
     while True:
         frame = frame_read.frame
@@ -396,6 +367,7 @@ def main():
             if key != -1:
                 keyboard(drone, key)
             else:
+                print("[*] Stage 4 but no arcuo 4! Spinning...")
                 drone.send_rc_control(0, 0, 0, 0)
             cv2.imshow("drone", frame)
             continue
@@ -409,40 +381,48 @@ def main():
             print("[*] Distance:", distance)
             if distance <= 130 and int(yaw_update) <= 1:
                 print("[*] Correct! Go to Stage 5!")
-                drone.send_rc_control(0, 0, 0, 0)
-                cv2.waitKey(2000)
                 break
         cv2.imshow("drone", tagged_frame)
 
+    for _ in range(20):
+        drone.send_rc_control(0, 0, 0, 0)
+        cv2.waitKey(50)
+        print("[*] Stage 4 -> 5 wait for 1 second")
+        cv2.imshow("drone", frame)
     # Find aruco 5
-    flag_5 = False
+    # flag_5 = False
     while True:
         frame = frame_read.frame
         key = cv2.waitKey(33)
         K_TARGET_ID = 5
-        packed_data = tracking_aruco(frame, K_TARGET_ID, 200)
+        packed_data = tracking_aruco(frame, K_TARGET_ID, 130)
         if not packed_data:
             if key != -1:
                 keyboard(drone, key)
             else:
-                drone.send_rc_control(-20, -10, 0, 0)
+                drone.send_rc_control(-20, -8, 0, 0)
                 print("[*] Moving Left...")
             cv2.imshow("drone", frame)
             continue
-        if flag_5 == False:
-            cv2.waitKey(1000)
-            flag_5 = True
+        # if flag_5 == False:
+        drone.send_rc_control(0, 0, 0, 0)
+        # cv2.waitKey(1000)
+        # flag_5 = True
         tagged_frame, x_update, y_update, z_update, yaw_update, distance = packed_data
         if key != -1:
             keyboard(drone, key)
         elif x_update and y_update and z_update and yaw_update:  # We see marker
-            drone.send_rc_control(0, int(z_update), int(y_update), int(yaw_update))
+            drone.send_rc_control(5, int(z_update), 0, 0)
             print("[*] Distance:", distance)
-            if distance > 120:
+            if distance > 130 and distance < 160:
                 print("[*] STOP!")
                 break
         cv2.imshow("drone", tagged_frame)
-
+    for _ in range(20):
+        drone.send_rc_control(0, 0, 0, 0)
+        cv2.waitKey(50)
+        print("[*] Stage 5 end wait for 1 second")
+        cv2.imshow("drone", frame)
     drone.land()
     # cv2.destroyAllWindows()
 
