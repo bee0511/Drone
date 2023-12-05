@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 2
+names: ['carna', 'melody']
+
+roboflow:
+  workspace: nycu-mglyb
+  project: uav-ynvje
+  version: 1
+  license: MIT
+  url: https://universe.roboflow.com/nycu-mglyb/uav-ynvje/dataset/1
