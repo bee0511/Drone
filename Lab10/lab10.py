@@ -4,6 +4,7 @@ import os
 from djitellopy import Tello
 from pyimagesearch.pid import PID
 from keyboard_djitellopy import keyboard
+from otsu import *
 
 KERNEL_SIZE = 3
 CALIBRATE_FILE = "calibrate-01.xml"
@@ -41,6 +42,8 @@ def clamping(val):
 K_X_OFFSET = 30
 K_Y_UPWARD_OFFSET = 15
 K_Y_DOWNWARD_BOOST = 60
+
+
 def tracking_aruco(frame, marker_id, z_distance):
     # Make a copy of frame
     frame = frame.copy()
@@ -99,7 +102,7 @@ def tracking_aruco(frame, marker_id, z_distance):
         x_update = clamping(pid_controller_x.update(x_error, sleep=0))
         y_update = clamping(pid_controller_y.update(y_error, sleep=0))
         z_update = clamping(pid_controller_z.update(z_error, sleep=0))
-        yaw_update = clamping(yaw_controller_pid.update(-(yaw_error+3), sleep=0))
+        yaw_update = clamping(yaw_controller_pid.update(-(yaw_error + 3), sleep=0))
         return (modified_frame, x_update, y_update, z_update, yaw_update, tvec[0, 0, 2])
     return None
 
@@ -111,6 +114,43 @@ def send_drone_control(drone, key, x_update, y_update, z_update, yaw_update):
         # drone.send_rc_control(x_update, z_update, y_update, 0)
         drone.send_rc_control(x_update, z_update, y_update, yaw_update)
         print(x_update, yaw_update, z_update, yaw_update)
+
+
+class LineFollower:
+    def __init__(self, drone):
+        self.drone = drone
+        self.otsu_threshold = OtsuThreshold()
+        self.speed = 20
+
+    def follow_line(self, frame):
+        # Process the frame using Otsu's thresholding
+        processed_frame = self.otsu_threshold.process_frame(frame)
+
+        # Find contours in the processed frame
+        contours, _ = cv2.findContours(
+            processed_frame, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
+        )
+
+        # Find the largest contour and its center
+        if contours:
+            largest_contour = max(contours, key=cv2.contourArea)
+            moments = cv2.moments(largest_contour)
+            if moments["m00"] != 0:
+                cx = int(moments["m10"] / moments["m00"])
+                cy = int(moments["m01"] / moments["m00"])
+
+                # Control the drone based on the position of the center
+                if cx < frame.shape[1] // 2:
+                    self.drone.move_left(self.speed)
+                else:
+                    self.drone.move_right(self.speed)
+
+                if cy < frame.shape[0] // 2:
+                    self.drone.move_up(self.speed)
+                else:
+                    self.drone.move_down(self.speed)
+
+        cv2.imshow("frame", processed_frame)
 
 
 def main():
@@ -155,7 +195,7 @@ def main():
             send_drone_control(drone, key, x_update, y_update, z_update, yaw_update)
             cv2.putText(
                 labeled_frame,
-                f'{x_update}, {y_update}, {z_update}, {yaw_update}',
+                f"{x_update}, {y_update}, {z_update}, {yaw_update}",
                 (200, 200),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.4,
@@ -165,11 +205,16 @@ def main():
             )
             cv2.imshow("aruco", labeled_frame)
 
-    # Start tracking line
-    # cv2.imshow("edges", edges_frame)
-    # cv2.imshow("dilation", dilated_frame)
-    drone.send_rc_control(0, 0, 0, 0)
-    key = cv2.waitKey(33)
+    # Line Following
+    line_follower = LineFollower(drone)
+    while True:
+        frame = drone.get_frame_read().frame
+        key = cv2.waitKey(33)
+        if key != -1:
+            keyboard(drone, key)
+            continue
+        else:
+            line_follower.follow_line(frame)
 
 
 if __name__ == "__main__":
