@@ -137,36 +137,41 @@ class LineFollower:
         '''
         Seperate frame into 4 parts by current direction, if right/left, then seperate by height, if up/down, then seperate by width
         '''
-        # 720 x 960
+        # 720 x 960, 180 x 240
         frame_height, frame_width, _ = frame.shape
+
+        # Seperate frame into 4 parts, each part is a sensor, then average each sensor
+        # 0-20%: sensor_1
+        # 25-45%: sensor_2
+        # 50-70%: sensor_3
+        # 80%-100%: sensor_4
+        
+        
         if self.current_direction == 'right':
-            unit = frame_width // 4
-            sensor_1 = frame[:unit, (frame_width // 3) * 2:frame_width]
-            sensor_2 = frame[unit:unit*2, (frame_width // 3) * 2:frame_width]
-            sensor_3 = frame[unit*2:unit*3, (frame_width // 3) * 2:frame_width]
-            sensor_4 = frame[unit*3:unit*4, (frame_width // 3) * 2:frame_width]
+            sensor_size = 90
 
+            sensor_1 = frame[
+                0: sensor_size, 
+                (frame_width // 4) * 3:frame_width
+            ]
+            sensor_2 = frame[
+                sensor_size + 60: sensor_size * 2 + 60,
+                (frame_width // 4) * 3:frame_width
+            ]
+            sensor_3 = frame[
+                frame_height - sensor_size * 2 - 60: frame_height - sensor_size - 60, 
+                (frame_width // 4) * 3:frame_width
+            ]
+            sensor_4 = frame[
+                frame_height - sensor_size: frame_height,
+                (frame_width // 4) * 3:frame_width
+            ]
         elif self.current_direction == 'left':
-            unit = frame_width // 4
-            sensor_1 = frame[:unit, 0:frame_width // 3]
-            sensor_2 = frame[unit:unit*2, 0:frame_width // 3]
-            sensor_3 = frame[unit*2:unit*3, 0:frame_width // 3]
-            sensor_4 = frame[unit*3:unit*4, 0:frame_width // 3]
-                    
+            pass
         elif self.current_direction == 'up':
-            unit = frame_height // 4
-            sensor_1 = frame[0:frame_height // 3, :unit]
-            sensor_2 = frame[0:frame_height // 3, unit:unit*2]
-            sensor_3 = frame[0:frame_height // 3, unit*2:unit*3]
-            sensor_4 = frame[0:frame_height // 3, unit*3:unit*4]
-
+            pass
         elif self.current_direction == 'down':
-            unit = frame_height // 4
-            sensor_1 = frame[(frame_height // 3) * 2:frame_height, :unit]
-            sensor_2 = frame[(frame_height // 3) * 2:frame_height, unit:unit*2]
-            sensor_3 = frame[(frame_height // 3) * 2:frame_height, unit*2:unit*3]
-            sensor_4 = frame[(frame_height // 3) * 2:frame_height, unit*3:unit*4]
-
+            pass
         else:
             return 0, 0, 0, 0
         
