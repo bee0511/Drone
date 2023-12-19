@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import os
+import time
 from djitellopy import Tello
 from pyimagesearch.pid import PID
 from keyboard_djitellopy import keyboard
@@ -8,8 +9,7 @@ from otsu import *
 
 KERNEL_SIZE = 3
 CALIBRATE_FILE = "calibrate-01.xml"
-THRESHOLD = 150
-MAX_SPEED_THRESHOLD = 30
+MAX_SPEED_THRESHOLD = 25
 
 # Check calibration file exists
 if not os.path.isfile(CALIBRATE_FILE):
@@ -25,10 +25,10 @@ dictionary = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
 # Initialize the detector parameters using default values
 parameters = cv2.aruco.DetectorParameters_create()
 
-pid_controller_x = PID(kP=0.4, kI=0.0008, kD=0.4)
-pid_controller_y = PID(kP=0.6, kI=0.0002, kD=0.1)
-pid_controller_z = PID(kP=0.5, kI=0.0002, kD=0.1)
-yaw_controller_pid = PID(kP=0.7, kI=0.0002, kD=0.1)
+pid_controller_x = PID(kP=0.7, kI=0.0001, kD=0.1)
+pid_controller_y = PID(kP=0.7, kI=0.0001, kD=0.1)
+pid_controller_z = PID(kP=0.7, kI=0.0001, kD=0.1)
+yaw_controller_pid = PID(kP=0.7, kI=0.0001, kD=0.1)
 height_controller_pid = PID(kP=0.7, kI=0.0001, kD=0.1)
 
 
@@ -40,7 +40,7 @@ def clamping(val):
     return int(val)
 
 
-K_X_OFFSET = 30
+K_X_OFFSET = 25
 K_Y_UPWARD_OFFSET = 15
 K_Y_DOWNWARD_BOOST = 60
 
@@ -111,27 +111,18 @@ def tracking_aruco(frame, marker_id, z_distance):
 def send_drone_control(drone, key, x_update, y_update, z_update, yaw_update):
     if key != -1:
         keyboard(drone, key)
-    elif x_update and y_update and z_update and yaw_update:
-        # drone.send_rc_control(x_update, z_update, y_update, 0)
+    else:
         drone.send_rc_control(x_update, z_update, y_update, yaw_update)
         print(x_update, yaw_update, z_update, yaw_update)
 
-
 class LineFollower:
-    PATH = (
-        'right',
-        'up',
-        'right',
-        'up',
-        'left',
-        'down'
-    )
-
-    def __init__(self, drone):
+    def __init__(self, drone, path):
+        self.threshold = 150
         self.drone = drone
         self.otsu_threshold = OtsuThreshold()
-        self.speed = 20
-        self.current_direction = 'left'
+        self.speed = 10
+        self.full_path = path
+        self.current_path = 0
 
     def scan_result(self, frame):
         '''
@@ -145,8 +136,8 @@ class LineFollower:
         # 25-45%: sensor_2
         # 50-70%: sensor_3
         # 80%-100%: sensor_4
-        if self.current_direction == 'right':
-            sensor_size = 90
+        if self.full_path[self.current_path] == 'right':
+            sensor_size = 70
 
             sensor_1 = frame[
                 0: sensor_size, 
@@ -164,8 +155,8 @@ class LineFollower:
                 frame_height - sensor_size: frame_height,
                 (frame_width // 4) * 3:frame_width
             ]
-        elif self.current_direction == 'left':
-            sensor_size = 90
+        elif self.full_path[self.current_path] == 'left':
+            sensor_size = 70
 
             sensor_1 = frame[
                 0: sensor_size, 
@@ -183,7 +174,7 @@ class LineFollower:
                 frame_height - sensor_size: frame_height,
                 :frame_width // 4
             ]
-        elif self.current_direction == 'up':
+        elif self.full_path[self.current_path] == 'up':
             sensor_size = 100
             
             sensor_1 = frame[
@@ -202,7 +193,7 @@ class LineFollower:
                 : frame_height // 4,
                 frame_width - sensor_size: frame_width,
             ]
-        elif self.current_direction == 'down':
+        elif self.full_path[self.current_path] == 'down':
             sensor_size = 100
             
             sensor_1 = frame[
@@ -240,7 +231,18 @@ class LineFollower:
 
         # Scan result
         average_1, average_2, average_3, average_4 = self.scan_result(processed_frame)
+        
+        triggered_1 = True if average_1 <= self.threshold else False
+        triggered_2 = True if average_2 <= self.threshold else False
+        triggered_3 = True if average_3 <= self.threshold else False
+        triggered_4 = True if average_4 <= self.threshold else False
         print(average_1, average_2, average_3, average_4)
+        print(self.full_path[self.current_path], triggered_1, triggered_2, triggered_3, triggered_4)
+        # Left/Right Sensor Layout, Top/Down
+        #   |1|                     |1|2|3|4|
+        #   |2|
+        #   |3|
+        #   |4|
 
         cv2.imshow("line_follower__frame", processed_frame)
 
@@ -257,57 +259,60 @@ def main():
     frame_read = drone.get_frame_read()
     key = -1
     distance_to_target = 1e9
-
-    # frame = frame_read.frame
-    # gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    # cv2.threshold(gray_frame, THRESHOLD, 255, cv2.THRESH_BINARY)
-    # blur_gray = cv2.GaussianBlur(gray_frame,(KERNEL_SIZE, KERNEL_SIZE), 0)
-    # edges_frame = cv2.Canny(blur_gray, 128, 128)
-    # dilated_frame = cv2.dilate(edges_frame, (KERNEL_SIZE, KERNEL_SIZE), iterations=5)
+    drone.send_rc_control(0, 0, 0, 0)
 
     # Aruco Tracking to specific range
-    # while distance_to_target > 50:
-    #     frame = frame_read.frame
-    #     key = cv2.waitKey(33)
-    #     cv2.imshow("frame", frame)
+    TARGET_DISTANCE = 40
+    while distance_to_target > TARGET_DISTANCE:
+        frame = frame_read.frame
+        key = cv2.waitKey(5)
+        cv2.imshow("frame", frame)
 
-    #     tracking_result = tracking_aruco(frame, 3, 50)
-    #     if key != -1:
-    #         keyboard(drone, key)
-    #     elif tracking_result:
-    #         (
-    #             labeled_frame,
-    #             x_update,
-    #             y_update,
-    #             z_update,
-    #             yaw_update,
-    #             distance_to_target,
-    #         ) = tracking_result
-    #         print(distance_to_target)
-    #         # send_drone_control(drone, key, x_update, y_update, z_update, yaw_update) 
-    #         cv2.putText(
-    #             labeled_frame,
-    #             f"{x_update}, {y_update}, {z_update}, {yaw_update}",
-    #             (200, 200),
-    #             cv2.FONT_HERSHEY_SIMPLEX,
-    #             0.4,
-    #             (0, 255, 0),
-    #             2,
-    #             cv2.LINE_AA,
-    #         )
-    #         cv2.imshow("aruco", labeled_frame)
-
+        tracking_result = tracking_aruco(frame, 3, TARGET_DISTANCE)
+        if key != -1:
+            keyboard(drone, key)
+        elif tracking_result:
+            (
+                labeled_frame,
+                x_update,
+                y_update,
+                z_update,
+                yaw_update,
+                distance_to_target,
+            ) = tracking_result
+            print(distance_to_target)
+            send_drone_control(drone, key, x_update, y_update, z_update, 0) 
+            cv2.putText(
+                labeled_frame,
+                f"{x_update}, {y_update}, {z_update}, {yaw_update}",
+                (200, 200),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.4,
+                (0, 255, 0),
+                2,
+                cv2.LINE_AA,
+            )
+            cv2.imshow("aruco", labeled_frame)
+    
+    drone.send_rc_control(0, 0, 0, 0)
     # Line Following
-    line_follower = LineFollower(drone)
+    path = (
+        'right',
+        'up',
+        'right',
+        'up',
+        'left',
+        'down'
+    )
+    line_follower = LineFollower(drone, path)
     while True:
         frame = drone.get_frame_read().frame
-        key = cv2.waitKey(33)
+        key = cv2.waitKey(5)
         if key != -1:
             keyboard(drone, key)
             continue
         else:
             line_follower.follow_line(frame)
-
 
 if __name__ == "__main__":
     main()
