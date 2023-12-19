@@ -38,7 +38,7 @@ class OtsuThreshold:
 
         return thresh
 
-    def processFrame(self, frame):
+    def process_frame(self, frame):
         # compute otsu criteria
         best_threshold = self.otsu(frame)
 

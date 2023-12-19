@@ -146,16 +146,10 @@ class LineFollower:
             middle_unit = frame_height // 4
             middle_blocksize = frame_height // 3
 
-            top = frame[:border_unit                        , frame_width // 3 * 2:]
-            middle_1 = frame[middle_unit: middle_unit + middle_blocksize , frame_width // 3 * 2:]
-            middle_2 = frame[middle_unit * 3 - middle_blocksize: middle_unit * 3, frame_width // 3 * 2:]
-            bottom = frame[border_unit * 5: border_unit * 6    , frame_width // 3 * 2:]
-
-            average_top = np.average(top)
-            average_middle_1 = np.average(middle_1)
-            average_middle_2 = np.average(middle_2)
-            average_bottom = np.average(bottom)
-            return average_top, average_middle_1, average_middle_2, average_bottom
+            sensor_1 = frame[:border_unit                        , frame_width // 3 * 2:]
+            sensor_2 = frame[middle_unit: middle_unit + middle_blocksize , frame_width // 3 * 2:]
+            sensor_3 = frame[middle_unit * 3 - middle_blocksize: middle_unit * 3, frame_width // 3 * 2:]
+            sensor_4 = frame[border_unit * 5: border_unit * 6    , frame_width // 3 * 2:]
 
         elif self.current_direction == 'left':
             # Seperate frame into 3 parts by current direction, top 15% and bottom 15%
@@ -163,33 +157,21 @@ class LineFollower:
             middle_unit = frame_height // 4
             middle_blocksize = frame_height // 3
 
-            top = frame[:border_unit                        , :frame_width // 3]
-            middle_1 = frame[middle_unit: middle_unit + middle_blocksize , :frame_width // 3]
-            middle_2 = frame[middle_unit * 3 - middle_blocksize: middle_unit * 3, :frame_width // 3]
-            bottom = frame[border_unit * 5: border_unit * 6    , :frame_width // 3]
-
-            average_top = np.average(top)
-            average_middle_1 = np.average(middle_1)
-            average_middle_2 = np.average(middle_2)
-            average_bottom = np.average(bottom)
-            return average_top, average_middle_1, average_middle_2, average_bottom
-        
+            sensor_1 = frame[:border_unit                        , :frame_width // 3]
+            sensor_2 = frame[middle_unit: middle_unit + middle_blocksize , :frame_width // 3]
+            sensor_3 = frame[middle_unit * 3 - middle_blocksize: middle_unit * 3, :frame_width // 3]
+            sensor_4 = frame[border_unit * 5: border_unit * 6    , :frame_width // 3]
+                    
         elif self.current_direction == 'up':
             # Seperate frame into 3 parts by current direction, top 15% and bottom 15%
             border_unit = frame_width // 6
             middle_unit = frame_width // 4
             middle_blocksize = frame_width // 3
-
-            left = frame[:frame_height // 3, :border_unit]
-            middle_1 = frame[:frame_height // 3, middle_unit: middle_unit + middle_blocksize]
-            middle_2 = frame[:frame_height // 3, middle_unit * 3 - middle_blocksize: middle_unit * 3]
-            right = frame[:frame_height // 3, border_unit * 5: border_unit * 6]
-
-            average_left = np.average(left)
-            average_middle_1 = np.average(middle_1)
-            average_middle_2 = np.average(middle_2)
-            average_right = np.average(right)
-            return average_left, average_middle_1, average_middle_2, average_right
+            
+            sensor_1 = frame[:frame_height // 3, :border_unit]
+            sensor_2 = frame[:frame_height // 3, middle_unit: middle_unit + middle_blocksize]
+            sensor_3 = frame[:frame_height // 3, middle_unit * 3 - middle_blocksize: middle_unit * 3]
+            sensor_4 = frame[:frame_height // 3, border_unit * 5: border_unit * 6]
 
         elif self.current_direction == 'down':
             # Seperate frame into 3 parts by current direction, top 15% and bottom 15%
@@ -197,16 +179,22 @@ class LineFollower:
             middle_unit = frame_width // 4
             middle_blocksize = frame_width // 3
 
-            left = frame[frame_height // 3 * 2:, :border_unit]
-            middle_1 = frame[frame_height // 3 * 2:, middle_unit: middle_unit + middle_blocksize]
-            middle_2 = frame[frame_height // 3 * 2:, middle_unit * 3 - middle_blocksize: middle_unit * 3]
-            right = frame[frame_height // 3 * 2:, border_unit * 5: border_unit * 6]
-
-            average_left = np.average(left)
-            average_middle_1 = np.average(middle_1)
-            average_middle_2 = np.average(middle_2)
-            average_right = np.average(right)
-            return average_left, average_middle_1, average_middle_2, average_right
+            sensor_1 = frame[frame_height // 3 * 2:, :border_unit]
+            sensor_2 = frame[frame_height // 3 * 2:, middle_unit: middle_unit + middle_blocksize]
+            sensor_3 = frame[frame_height // 3 * 2:, middle_unit * 3 - middle_blocksize: middle_unit * 3]
+            sensor_4 = frame[frame_height // 3 * 2:, border_unit * 5: border_unit * 6]
+        else:
+            return 0, 0, 0, 0
+        
+        average_1 = np.average(sensor_1)
+        average_2 = np.average(sensor_2)
+        average_3 = np.average(sensor_3)
+        average_4 = np.average(sensor_4)
+        cv2.imshow('sensor_1', sensor_1)
+        cv2.imshow('sensor_2', sensor_2)
+        cv2.imshow('sensor_3', sensor_3)
+        cv2.imshow('sensor_4', sensor_4)
+        return average_1, average_2, average_3, average_4
 
 
     def follow_line(self, frame):
@@ -240,36 +228,36 @@ def main():
     # dilated_frame = cv2.dilate(edges_frame, (KERNEL_SIZE, KERNEL_SIZE), iterations=5)
 
     # Aruco Tracking to specific range
-    while distance_to_target > 50:
-        frame = frame_read.frame
-        key = cv2.waitKey(33)
-        cv2.imshow("frame", frame)
+    # while distance_to_target > 50:
+    #     frame = frame_read.frame
+    #     key = cv2.waitKey(33)
+    #     cv2.imshow("frame", frame)
 
-        tracking_result = tracking_aruco(frame, 0, 50)
-        if key != -1:
-            keyboard(drone, key)
-        elif tracking_result:
-            (
-                labeled_frame,
-                x_update,
-                y_update,
-                z_update,
-                yaw_update,
-                distance_to_target,
-            ) = tracking_result
-            print(distance_to_target)
-            # send_drone_control(drone, key, x_update, y_update, z_update, yaw_update) 
-            cv2.putText(
-                labeled_frame,
-                f"{x_update}, {y_update}, {z_update}, {yaw_update}",
-                (200, 200),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.4,
-                (0, 255, 0),
-                2,
-                cv2.LINE_AA,
-            )
-            cv2.imshow("aruco", labeled_frame)
+    #     tracking_result = tracking_aruco(frame, 3, 50)
+    #     if key != -1:
+    #         keyboard(drone, key)
+    #     elif tracking_result:
+    #         (
+    #             labeled_frame,
+    #             x_update,
+    #             y_update,
+    #             z_update,
+    #             yaw_update,
+    #             distance_to_target,
+    #         ) = tracking_result
+    #         print(distance_to_target)
+    #         # send_drone_control(drone, key, x_update, y_update, z_update, yaw_update) 
+    #         cv2.putText(
+    #             labeled_frame,
+    #             f"{x_update}, {y_update}, {z_update}, {yaw_update}",
+    #             (200, 200),
+    #             cv2.FONT_HERSHEY_SIMPLEX,
+    #             0.4,
+    #             (0, 255, 0),
+    #             2,
+    #             cv2.LINE_AA,
+    #         )
+    #         cv2.imshow("aruco", labeled_frame)
 
     # Line Following
     line_follower = LineFollower(drone)
