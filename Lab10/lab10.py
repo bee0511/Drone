@@ -24,6 +24,7 @@ distortion = f.getNode("distortion").mat()
 dictionary = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
 # Initialize the detector parameters using default values
 parameters = cv2.aruco.DetectorParameters_create()
+
 pid_controller_x = PID(kP=0.4, kI=0.0008, kD=0.4)
 pid_controller_y = PID(kP=0.6, kI=0.0002, kD=0.1)
 pid_controller_z = PID(kP=0.5, kI=0.0002, kD=0.1)
@@ -117,40 +118,105 @@ def send_drone_control(drone, key, x_update, y_update, z_update, yaw_update):
 
 
 class LineFollower:
+    PATH = (
+        'right',
+        'up',
+        'right',
+        'up',
+        'left',
+        'down'
+    )
+
     def __init__(self, drone):
         self.drone = drone
         self.otsu_threshold = OtsuThreshold()
         self.speed = 20
+        self.current_direction = 'left'
+
+    def scan_result(self, frame):
+        '''
+        Seperate frame into 4 parts by current direction, if right/left, then seperate by height, if up/down, then seperate by width
+        '''
+        # 720 x 960
+        frame_height, frame_width, _ = frame.shape
+        # If right we use 30% of the frame at right side
+        if self.current_direction == 'right':
+            # Seperate frame into 3 parts by current direction, top 15% and bottom 15%
+            border_unit = frame_height // 6
+            middle_unit = frame_height // 4
+            middle_blocksize = frame_height // 3
+
+            top = frame[:border_unit                        , frame_width // 3 * 2:]
+            middle_1 = frame[middle_unit: middle_unit + middle_blocksize , frame_width // 3 * 2:]
+            middle_2 = frame[middle_unit * 3 - middle_blocksize: middle_unit * 3, frame_width // 3 * 2:]
+            bottom = frame[border_unit * 5: border_unit * 6    , frame_width // 3 * 2:]
+
+            average_top = np.average(top)
+            average_middle_1 = np.average(middle_1)
+            average_middle_2 = np.average(middle_2)
+            average_bottom = np.average(bottom)
+            return average_top, average_middle_1, average_middle_2, average_bottom
+
+        elif self.current_direction == 'left':
+            # Seperate frame into 3 parts by current direction, top 15% and bottom 15%
+            border_unit = frame_height // 6
+            middle_unit = frame_height // 4
+            middle_blocksize = frame_height // 3
+
+            top = frame[:border_unit                        , :frame_width // 3]
+            middle_1 = frame[middle_unit: middle_unit + middle_blocksize , :frame_width // 3]
+            middle_2 = frame[middle_unit * 3 - middle_blocksize: middle_unit * 3, :frame_width // 3]
+            bottom = frame[border_unit * 5: border_unit * 6    , :frame_width // 3]
+
+            average_top = np.average(top)
+            average_middle_1 = np.average(middle_1)
+            average_middle_2 = np.average(middle_2)
+            average_bottom = np.average(bottom)
+            return average_top, average_middle_1, average_middle_2, average_bottom
+        
+        elif self.current_direction == 'up':
+            # Seperate frame into 3 parts by current direction, top 15% and bottom 15%
+            border_unit = frame_width // 6
+            middle_unit = frame_width // 4
+            middle_blocksize = frame_width // 3
+
+            left = frame[:frame_height // 3, :border_unit]
+            middle_1 = frame[:frame_height // 3, middle_unit: middle_unit + middle_blocksize]
+            middle_2 = frame[:frame_height // 3, middle_unit * 3 - middle_blocksize: middle_unit * 3]
+            right = frame[:frame_height // 3, border_unit * 5: border_unit * 6]
+
+            average_left = np.average(left)
+            average_middle_1 = np.average(middle_1)
+            average_middle_2 = np.average(middle_2)
+            average_right = np.average(right)
+            return average_left, average_middle_1, average_middle_2, average_right
+
+        elif self.current_direction == 'down':
+            # Seperate frame into 3 parts by current direction, top 15% and bottom 15%
+            border_unit = frame_width // 6
+            middle_unit = frame_width // 4
+            middle_blocksize = frame_width // 3
+
+            left = frame[frame_height // 3 * 2:, :border_unit]
+            middle_1 = frame[frame_height // 3 * 2:, middle_unit: middle_unit + middle_blocksize]
+            middle_2 = frame[frame_height // 3 * 2:, middle_unit * 3 - middle_blocksize: middle_unit * 3]
+            right = frame[frame_height // 3 * 2:, border_unit * 5: border_unit * 6]
+
+            average_left = np.average(left)
+            average_middle_1 = np.average(middle_1)
+            average_middle_2 = np.average(middle_2)
+            average_right = np.average(right)
+            return average_left, average_middle_1, average_middle_2, average_right
+
 
     def follow_line(self, frame):
-        # Process the frame using Otsu's thresholding
         processed_frame = self.otsu_threshold.process_frame(frame)
 
-        # Find contours in the processed frame
-        contours, _ = cv2.findContours(
-            processed_frame, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
-        )
+        # Scan result
+        average_1, average_2, average_3, average_4 = self.scan_result(processed_frame)
+        print(average_1, average_2, average_3, average_4)
 
-        # Find the largest contour and its center
-        if contours:
-            largest_contour = max(contours, key=cv2.contourArea)
-            moments = cv2.moments(largest_contour)
-            if moments["m00"] != 0:
-                cx = int(moments["m10"] / moments["m00"])
-                cy = int(moments["m01"] / moments["m00"])
-
-                # Control the drone based on the position of the center
-                if cx < frame.shape[1] // 2:
-                    self.drone.move_left(self.speed)
-                else:
-                    self.drone.move_right(self.speed)
-
-                if cy < frame.shape[0] // 2:
-                    self.drone.move_up(self.speed)
-                else:
-                    self.drone.move_down(self.speed)
-
-        cv2.imshow("frame", processed_frame)
+        cv2.imshow("line_follower__frame", processed_frame)
 
 
 def main():
@@ -192,7 +258,7 @@ def main():
                 distance_to_target,
             ) = tracking_result
             print(distance_to_target)
-            send_drone_control(drone, key, x_update, y_update, z_update, yaw_update)
+            # send_drone_control(drone, key, x_update, y_update, z_update, yaw_update) 
             cv2.putText(
                 labeled_frame,
                 f"{x_update}, {y_update}, {z_update}, {yaw_update}",
