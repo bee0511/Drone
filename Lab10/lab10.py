@@ -141,31 +141,31 @@ class LineFollower:
         frame_height, frame_width, _ = frame.shape
         if self.current_direction == 'right':
             unit = frame_width // 4
-            sensor_1 = frame[:unit - 60, frame_width // 3: frame_width // 3 * 2]
-            sensor_2 = frame[unit: unit * 2, frame_width // 3: frame_width // 3 * 2]
-            sensor_3 = frame[unit * 2: unit * 3, frame_width // 3: frame_width // 3 * 2]
-            sensor_4 = frame[unit * 3 + 60: unit * 4, frame_width // 3: frame_width // 3 * 2]
+            sensor_1 = frame[:unit, (frame_width // 3) * 2:frame_width]
+            sensor_2 = frame[unit:unit*2, (frame_width // 3) * 2:frame_width]
+            sensor_3 = frame[unit*2:unit*3, (frame_width // 3) * 2:frame_width]
+            sensor_4 = frame[unit*3:unit*4, (frame_width // 3) * 2:frame_width]
 
         elif self.current_direction == 'left':
             unit = frame_width // 4
-            sensor_1 = frame[:unit - 60, frame_width // 3: frame_width // 3 * 2]
-            sensor_2 = frame[unit: unit * 2, frame_width // 3: frame_width // 3 * 2]
-            sensor_3 = frame[unit * 2: unit * 3, frame_width // 3: frame_width // 3 * 2]
-            sensor_4 = frame[unit * 3 + 60: unit * 4, frame_width // 3: frame_width // 3 * 2]
+            sensor_1 = frame[:unit, 0:frame_width // 3]
+            sensor_2 = frame[unit:unit*2, 0:frame_width // 3]
+            sensor_3 = frame[unit*2:unit*3, 0:frame_width // 3]
+            sensor_4 = frame[unit*3:unit*4, 0:frame_width // 3]
                     
         elif self.current_direction == 'up':
             unit = frame_height // 4
-            sensor_1 = frame[frame_height // 3: frame_height // 3 * 2, :unit - 60]
-            sensor_2 = frame[frame_height // 3: frame_height // 3 * 2, unit: unit * 2]
-            sensor_3 = frame[frame_height // 3: frame_height // 3 * 2, unit * 2: unit * 3]
-            sensor_4 = frame[frame_height // 3: frame_height // 3 * 2, unit * 3 + 60 : unit * 4]
+            sensor_1 = frame[0:frame_height // 3, :unit]
+            sensor_2 = frame[0:frame_height // 3, unit:unit*2]
+            sensor_3 = frame[0:frame_height // 3, unit*2:unit*3]
+            sensor_4 = frame[0:frame_height // 3, unit*3:unit*4]
 
         elif self.current_direction == 'down':
             unit = frame_height // 4
-            sensor_1 = frame[frame_height // 3: frame_height // 3 * 2, :unit - 60]
-            sensor_2 = frame[frame_height // 3: frame_height // 3 * 2, unit: unit * 2]
-            sensor_3 = frame[frame_height // 3: frame_height // 3 * 2, unit * 2: unit * 3]
-            sensor_4 = frame[frame_height // 3: frame_height // 3 * 2, unit * 3 + 60: unit * 4]
+            sensor_1 = frame[(frame_height // 3) * 2:frame_height, :unit]
+            sensor_2 = frame[(frame_height // 3) * 2:frame_height, unit:unit*2]
+            sensor_3 = frame[(frame_height // 3) * 2:frame_height, unit*2:unit*3]
+            sensor_4 = frame[(frame_height // 3) * 2:frame_height, unit*3:unit*4]
 
         else:
             return 0, 0, 0, 0
