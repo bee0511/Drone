@@ -139,50 +139,34 @@ class LineFollower:
         '''
         # 720 x 960
         frame_height, frame_width, _ = frame.shape
-        # If right we use 30% of the frame at right side
         if self.current_direction == 'right':
-            # Seperate frame into 3 parts by current direction, top 15% and bottom 15%
-            border_unit = frame_height // 6
-            middle_unit = frame_height // 4
-            middle_blocksize = frame_height // 3
-
-            sensor_1 = frame[:border_unit                        , frame_width // 3 * 2:]
-            sensor_2 = frame[middle_unit: middle_unit + middle_blocksize , frame_width // 3 * 2:]
-            sensor_3 = frame[middle_unit * 3 - middle_blocksize: middle_unit * 3, frame_width // 3 * 2:]
-            sensor_4 = frame[border_unit * 5: border_unit * 6    , frame_width // 3 * 2:]
+            unit = frame_width // 4
+            sensor_1 = frame[:unit - 60, frame_width // 3: frame_width // 3 * 2]
+            sensor_2 = frame[unit: unit * 2, frame_width // 3: frame_width // 3 * 2]
+            sensor_3 = frame[unit * 2: unit * 3, frame_width // 3: frame_width // 3 * 2]
+            sensor_4 = frame[unit * 3 + 60: unit * 4, frame_width // 3: frame_width // 3 * 2]
 
         elif self.current_direction == 'left':
-            # Seperate frame into 3 parts by current direction, top 15% and bottom 15%
-            border_unit = frame_height // 6
-            middle_unit = frame_height // 4
-            middle_blocksize = frame_height // 3
-
-            sensor_1 = frame[:border_unit                        , :frame_width // 3]
-            sensor_2 = frame[middle_unit: middle_unit + middle_blocksize , :frame_width // 3]
-            sensor_3 = frame[middle_unit * 3 - middle_blocksize: middle_unit * 3, :frame_width // 3]
-            sensor_4 = frame[border_unit * 5: border_unit * 6    , :frame_width // 3]
+            unit = frame_width // 4
+            sensor_1 = frame[:unit - 60, frame_width // 3: frame_width // 3 * 2]
+            sensor_2 = frame[unit: unit * 2, frame_width // 3: frame_width // 3 * 2]
+            sensor_3 = frame[unit * 2: unit * 3, frame_width // 3: frame_width // 3 * 2]
+            sensor_4 = frame[unit * 3 + 60: unit * 4, frame_width // 3: frame_width // 3 * 2]
                     
         elif self.current_direction == 'up':
-            # Seperate frame into 3 parts by current direction, top 15% and bottom 15%
-            border_unit = frame_width // 6
-            middle_unit = frame_width // 4
-            middle_blocksize = frame_width // 3
-            
-            sensor_1 = frame[:frame_height // 3, :border_unit]
-            sensor_2 = frame[:frame_height // 3, middle_unit: middle_unit + middle_blocksize]
-            sensor_3 = frame[:frame_height // 3, middle_unit * 3 - middle_blocksize: middle_unit * 3]
-            sensor_4 = frame[:frame_height // 3, border_unit * 5: border_unit * 6]
+            unit = frame_height // 4
+            sensor_1 = frame[frame_height // 3: frame_height // 3 * 2, :unit - 60]
+            sensor_2 = frame[frame_height // 3: frame_height // 3 * 2, unit: unit * 2]
+            sensor_3 = frame[frame_height // 3: frame_height // 3 * 2, unit * 2: unit * 3]
+            sensor_4 = frame[frame_height // 3: frame_height // 3 * 2, unit * 3 + 60 : unit * 4]
 
         elif self.current_direction == 'down':
-            # Seperate frame into 3 parts by current direction, top 15% and bottom 15%
-            border_unit = frame_width // 6
-            middle_unit = frame_width // 4
-            middle_blocksize = frame_width // 3
+            unit = frame_height // 4
+            sensor_1 = frame[frame_height // 3: frame_height // 3 * 2, :unit - 60]
+            sensor_2 = frame[frame_height // 3: frame_height // 3 * 2, unit: unit * 2]
+            sensor_3 = frame[frame_height // 3: frame_height // 3 * 2, unit * 2: unit * 3]
+            sensor_4 = frame[frame_height // 3: frame_height // 3 * 2, unit * 3 + 60: unit * 4]
 
-            sensor_1 = frame[frame_height // 3 * 2:, :border_unit]
-            sensor_2 = frame[frame_height // 3 * 2:, middle_unit: middle_unit + middle_blocksize]
-            sensor_3 = frame[frame_height // 3 * 2:, middle_unit * 3 - middle_blocksize: middle_unit * 3]
-            sensor_4 = frame[frame_height // 3 * 2:, border_unit * 5: border_unit * 6]
         else:
             return 0, 0, 0, 0
         
