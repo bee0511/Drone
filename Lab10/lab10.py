@@ -145,8 +145,6 @@ class LineFollower:
         # 25-45%: sensor_2
         # 50-70%: sensor_3
         # 80%-100%: sensor_4
-        
-        
         if self.current_direction == 'right':
             sensor_size = 90
 
@@ -167,11 +165,62 @@ class LineFollower:
                 (frame_width // 4) * 3:frame_width
             ]
         elif self.current_direction == 'left':
-            pass
+            sensor_size = 90
+
+            sensor_1 = frame[
+                0: sensor_size, 
+                :frame_width // 4
+            ]
+            sensor_2 = frame[
+                sensor_size + 60: sensor_size * 2 + 60,
+                :frame_width // 4
+            ]
+            sensor_3 = frame[
+                frame_height - sensor_size * 2 - 60: frame_height - sensor_size - 60, 
+                :frame_width // 4
+            ]
+            sensor_4 = frame[
+                frame_height - sensor_size: frame_height,
+                :frame_width // 4
+            ]
         elif self.current_direction == 'up':
-            pass
+            sensor_size = 100
+            
+            sensor_1 = frame[
+                : frame_height // 4,
+                0: sensor_size
+            ]
+            sensor_2 = frame[
+                : frame_height // 4,
+                sensor_size + 120: sensor_size * 2 + 120,
+            ]
+            sensor_3 = frame[
+                : frame_height // 4,
+                frame_width - sensor_size * 2 - 120: frame_width - sensor_size - 120, 
+            ]
+            sensor_4 = frame[
+                : frame_height // 4,
+                frame_width - sensor_size: frame_width,
+            ]
         elif self.current_direction == 'down':
-            pass
+            sensor_size = 100
+            
+            sensor_1 = frame[
+                (frame_height // 4) * 3: frame_height,
+                0: sensor_size
+            ]
+            sensor_2 = frame[
+                (frame_height // 4) * 3: frame_height,
+                sensor_size + 120: sensor_size * 2 + 120,
+            ]
+            sensor_3 = frame[
+                (frame_height // 4) * 3: frame_height,
+                frame_width - sensor_size * 2 - 120: frame_width - sensor_size - 120, 
+            ]
+            sensor_4 = frame[
+                (frame_height // 4) * 3: frame_height,
+                frame_width - sensor_size: frame_width,
+            ]
         else:
             return 0, 0, 0, 0
         
