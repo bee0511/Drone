@@ -16,6 +16,31 @@ from utils.general import non_max_suppression_kpt, scale_coords
 from utils.plots import  plot_one_box
 
 
+def estimatePoseSingleMarkers(corners, marker_size, mtx, distortion):
+    '''
+    This will estimate the rvec and tvec for each of the marker corners detected by:
+       corners, ids, rejectedImgPoints = detector.detectMarkers(image)
+    corners - is an array of detected corners for each detected marker in the image
+    marker_size - is the size of the detected markers
+    mtx - is the camera matrix
+    distortion - is the camera distortion matrix
+    RETURN list of rvecs, tvecs, and trash (so that it corresponds to the old estimatePoseSingleMarkers())
+    '''
+    marker_points = np.array([[-marker_size / 2, marker_size / 2, 0],
+                              [marker_size / 2, marker_size / 2, 0],
+                              [marker_size / 2, -marker_size / 2, 0],
+                              [-marker_size / 2, -marker_size / 2, 0]], dtype=np.float32)
+    trash = []
+    rvecs = []
+    tvecs = []
+    i = 0
+    for c in corners:
+        nada, R, t = cv2.solvePnP(marker_points, corners[i], mtx, distortion, False, cv2.SOLVEPNP_IPPE_SQUARE)
+        rvecs.append(R)
+        tvecs.append(t)
+        trash.append(nada)
+    return rvecs, tvecs, trash
+
 class Drone:
     MAX_SPEED_THRESHOLD = 30
     SCALING_FACTOR = 1.2
@@ -24,14 +49,13 @@ class Drone:
     SCALING_FACTOR_Z = 0.3
 
     def __init__(self):
-        self.fs = cv2.FileStorage('calibration_result.xml', cv2.FILE_STORAGE_READ)
+        self.fs = cv2.FileStorage('calibrate-01.xml', cv2.FILE_STORAGE_READ)
         self.intrinsic = self.fs.getNode('intrinsic').mat()
         self.distortion = self.fs.getNode('distortion').mat()
 
         # Aruco marker
-        self.dictionary = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_6X6_250)
-        self.parameters = cv2.aruco.DetectorParameters()
-        self.aruco_detector = cv2.aruco.ArucoDetector(self.dictionary, self.parameters)
+        self.dictionary = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
+        self.parameters = cv2.aruco.DetectorParameters_create()
         
         # Tello and frame_read object
         self.drone = Tello()
@@ -70,7 +94,7 @@ class Drone:
         return np.sum(mask == 255)
 
     def _detect_line_in_grid(self, frame):
-        height, width = frame
+        height, width, _ = frame.shape
         cells = [
             frame[i * height // 3: (i + 1) * height // 3, j * width // 3: (j + 1) * width // 3]
             for i in range(3) for j in range(3)
@@ -106,10 +130,23 @@ class Drone:
         :param expect_line: The line to follow
         :return: True if the line is found and followed, False otherwise (vel_h, vel_z, vel_v, vel_y)
         '''
+        frame = self.frame_read.frame
         line_now = self._detect_line_in_grid(self.frame_read.frame)
+        
+        self._draw_grid(frame)
+        cv2.imshow('follow_line', frame)
         print('[follow_line] expect_line:', expect_line)
         print('[follow_line] line_now:', line_now)
 
+        if direction == 'left':
+            a, b, c, d = -10, 0, 0, 0
+        elif direction == 'up':
+            a, b, c, d = 0, 0, 15, 0
+        elif direction == 'right':
+            a, b, c, d = 10, 0, 0, 0
+        elif direction == 'down':
+            a, b, c, d = 0, 0, -15, 0
+                
         if expect_line == [0, 0, 0, 0, 1, 1, 0, 1, 0]:     # 『
             if line_now == [0, 1, 1, 0, 1, 0, 0, 1, 0]:
                 a, b, c, d = 0, 0, 10, 0
@@ -118,7 +155,7 @@ class Drone:
             elif line_now == [0, 1, 0, 0, 1, 0, 0, 1, 0]:
                 a, b, c, d = 0, 0, 10, 0
             elif line_now == [0, 0, 0, 0, 0, 1, 0, 0, 1]:
-                a, b, c, d == 10, 0, 0, 0
+                a, b, c, d == 5, 0, 0, 0
             elif line_now == [0, 0, 0, 0, 1, 1, 0, 0, 0]:
                 a, b, c, d == 0, 5, 0, 0
         elif expect_line == [0, 1, 0, 1, 1, 0, 0, 0, 0]:   # 』
@@ -127,36 +164,27 @@ class Drone:
             elif line_now == [1, 1, 0, 0, 0, 0, 0, 0, 0]:
                 a, b, c, d = 0, 0, 10, 0
             elif line_now == [1, 0, 0, 1, 0, 0, 0, 0, 0]:
-                a, b, c, d = -10, 0, 0, 0
+                a, b, c, d = -5, 0, 0, 0
             elif line_now == [0, 1, 0, 0, 1, 0, 0, 1, 0]:
                 a, b, c, d = 0, 0, -10, 0
         elif expect_line == [0, 0, 0, 1, 1, 0, 0, 1, 0]:   #7
             if line_now == [0, 0, 0, 1, 0, 0, 1, 0, 0]:
                 a, b, c, d = -10, 0, 0, 0
             elif line_now == [0, 0, 0, 1, 1, 1, 0, 0, 1]:
-                a, b, c, d = 10, 0, 0, 0
+                a, b, c, d = 5, 0, 0, 0
         elif expect_line == [0, 1, 0, 1, 1, 1, 0, 0, 0]:
             if line_now == [1, 1, 1, 0, 0, 0, 0, 0, 0]:
                 a, b, c, d = 0, 0, 10, 0
             elif line_now == [0, 1, 0, 0, 1, 0, 1, 1, 1]:
                 a, b, c, d = 0, 0, -10, 0
             elif line_now == [1, 0, 0, 1, 0, 0, 1, 1, 1]:
-                a, b, c, d = -10, 0, -10, 0
+                a, b, c, d = -5, 0, -10, 0
             elif line_now == [0, 0, 1, 0, 0, 1, 1, 1, 1]:
-                a, b, c, d = 10, 0, -10, 0
+                a, b, c, d = 5, 0, -10, 0
             elif line_now == [0, 0, 1, 1, 1, 1, 0, 0, 0]:
-                a, b, c, d = 10, 0, 0, 0
+                a, b, c, d = 5, 0, 0, 0
             elif line_now == [1, 0, 0, 1, 1, 1, 0, 0, 0]:
-                a, b, c, d = -10, 0, 0, 0
-        else:
-            if direction == 0:
-                a, b, c, d = -10, 0, 0, 0
-            elif direction == 1:
-                a, b, c, d = 0, 0, 15, 0
-            elif direction == 2:
-                a, b, c, d = 10, 0, 0, 0
-            else:
-                a, b, c, d = 0, 0, -15, 0
+                a, b, c, d = -5, 0, 0, 0
 
         if line_now == expect_line:
             print('[follow_line] line found!')
@@ -171,39 +199,43 @@ class Drone:
         :return: True if the marker if found and reached, False otherwise
         '''
         frame = self.frame_read.frame
-        markerCorners, markerIds, _ = self.aruco_detector.detectMarkers(frame, self.dictionary, parameters=self.parameters)
+        markerCorners, markerIds, _ = cv2.aruco.detectMarkers(
+            frame, self.dictionary, parameters=self.parameters
+        )
+        rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(markerCorners, 15, self.intrinsic, self.distortion)
         frame = cv2.aruco.drawDetectedMarkers(frame, markerCorners, markerIds)
         cv2.imshow('follow_marker', frame)
+        
+        if np.array(rvec).ndim == 0:
+            return False, 0, 0, 0, 0
 
-        if len(markerCorners) > 0:
-            rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(markerCorners, 15, self.intrinsic, self.distortion)
-            frame_width, frame_height = frame.shape[1], frame.shape[0]
-            
-            for i in range(len(markerIds)):
-                if markerIds[i] == marker_id:
-                    center_x = (markerCorners[i][0][0][0] + markerCorners[i][0][2][0]) / 2
-                    center_y = (markerCorners[i][0][0][1] + markerCorners[i][0][2][1]) / 2
-                    horizontal_offset = center_x - frame_width / 2
-                    vertical_offset = -1 * (center_y - frame_height / 2)
-                    
-                    horizontal_update = horizontal_offset * self.scaling_factor_h
-                    vertical_update = vertical_offset * self.scaling_factor_y
-            
-                    rot_mat, _ = cv2.Rodrigues(rvec[i])
-                    euler_angles = cv2.RQDecomp3x3(rot_mat)
-                    yaw_angle = euler_angles[0][2]
-                    yaw_control = yaw_angle * self.scaling_factor        
+        frame_width, frame_height = frame.shape[1], frame.shape[0]
+        
+        for i in range(len(markerIds)):
+            if markerIds[i] == marker_id:
+                center_x = (markerCorners[i][0][0][0] + markerCorners[i][0][2][0]) / 2
+                center_y = (markerCorners[i][0][0][1] + markerCorners[i][0][2][1]) / 2
+                horizontal_offset = center_x - frame_width / 2
+                vertical_offset = -1 * (center_y - frame_height / 2)
+                
+                horizontal_update = horizontal_offset * self.SCALING_FACTOR_H
+                vertical_update = vertical_offset * self.SCALING_FACTOR_Y
+        
+                rot_mat, _ = cv2.Rodrigues(rvec[i])
+                euler_angles = cv2.RQDecomp3x3(rot_mat)
+                yaw_angle = euler_angles[0][2]
+                yaw_control = yaw_angle * self.SCALING_FACTOR        
 
-                    z_update = tvec[i, 0, 2] - distance
-                    if z_update < 15 and z_update > -15 and yaw_angle < 15 and yaw_angle > -15:
-                        return True, int(horizontal_update), int(z_update // 2), int(vertical_update // 2), int(yaw_control)
+                z_update = tvec[i, 0, 2] - distance
+                if z_update < 15 and z_update > -15 and yaw_angle < 15 and yaw_angle > -15:
+                    return True, int(horizontal_update), int(z_update // 2), int(vertical_update // 2), int(yaw_control)
 
-                    z_update = self._clamping(self.z_pid.update(z_update, sleep=0))
-                    horizontal_update = self._clamping(self.h_pid.update(horizontal_update, sleep=0))
-                    vertical_update = self._clamping(self.y_pid.update(vertical_update, sleep=0))
+                z_update = self._clamping(self.z_pid.update(z_update, sleep=0))
+                horizontal_update = self._clamping(self.h_pid.update(horizontal_update, sleep=0))
+                vertical_update = self._clamping(self.y_pid.update(vertical_update, sleep=0))
 
-                    print('[follow_marker] Target marker detected', 'h : ',  horizontal_update, 'f : ', z_update, 'v : ', vertical_update, 'r : ', yaw_control)
-                    return False, int(horizontal_update), int(z_update // 2), int(vertical_update // 2), int(yaw_control)
+                print('[follow_marker] Target marker detected', 'h : ',  horizontal_update, 'f : ', z_update, 'v : ', vertical_update, 'r : ', yaw_control)
+                return False, int(horizontal_update), int(z_update // 2), int(vertical_update // 2), int(yaw_control)
         
         print('[follow_marker] No marker detected, stay still!')
         return False, 0, 0, 0, 0
@@ -269,10 +301,10 @@ class Drone:
             else:
                 yaw_offset = 0
             
-            horizontal_update = horizontal_offset * self.scaling_factor_h
-            vertical_update = vertical_offset * self.scaling_factor_y
-            z_update = z_offset * self.scaling_factor_z
-            yaw_update = yaw_offset * self.scaling_factor 
+            horizontal_update = horizontal_offset * self.SCALING_FACTOR
+            vertical_update = vertical_offset * self.SCALING_FACTOR_Y
+            z_update = z_offset * self.SCALING_FACTOR_Z
+            yaw_update = yaw_offset * self.SCALING_FACTOR 
             
             yaw_update = self.yaw_pid.update(yaw_update, sleep=0)
             z_update = self._clamping(self.z_pid.update(z_update, sleep=0))
@@ -287,7 +319,9 @@ class Drone:
         :return: A list of marker ids found in the frame
         '''
         frame = self.frame_read.frame
-        markerCorners, markerIds, _ = self.aruco_detector.detectMarkers(frame, self.dictionary, parameters=self.parameters)
+        markerCorners, markerIds, _ = cv2.aruco.detectMarkers(
+            frame, self.dictionary, parameters=self.parameters
+        )
         frame = cv2.aruco.drawDetectedMarkers(frame, markerCorners, markerIds)
         cv2.imshow('find_marker', frame)
         return markerIds
@@ -298,7 +332,9 @@ class Drone:
         '''
         print(command, marker_id, direction, distance, expect_line)
         while True:
-            key = cv2.waitKey(5)
+            frame = self.frame_read.frame
+            cv2.imshow('work', frame)
+            key = cv2.waitKey(3)
 
             # DONT WRITE LOOPS INSIDE THIS CONDITION CHAIN
             if key != -1:
@@ -333,7 +369,7 @@ class Drone:
             elif command == 'up_until_marker':
                 self.send_control(0, 0, 30, 0)
                 marker_ids = self.find_marker()
-                if len(marker_ids) != 0:
+                if marker_ids:
                     self.send_control(0, 0, 0, 0)
                     return
             elif command == 'follow_marker':
@@ -358,73 +394,74 @@ class Drone:
                 print('[handle_command] Invalid command:', command)
             
 
-
 def main():
     drone = Drone()
     
-    # YOLOv7 detech object to decide which action to take
-    
-    WEIGHT = './best.pt'
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    model = attempt_load(WEIGHT, map_location=device)
-    if device == "cuda":
-        model = model.half().to(device)
-    else:
-        model = model.float().to(device)
-    names = model.module.names if hasattr(model, 'module') else model.names
-    colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
-
-    while True:
-        image = drone.frame_read.frame
-        image_labeled = image.copy()
-
-        image = letterbox(image, (640, 640), stride=64, auto=True)[0]
-        if device == "cuda":
-            image = transforms.ToTensor()(image).to(device).half().unsqueeze(0)
-        else:
-            image = transforms.ToTensor()(image).to(device).float().unsqueeze(0)
-
-        with torch.no_grad():
-            output = model(image)[0]
-        output = non_max_suppression_kpt(output, conf_thres=0.25, iou_thres=0.65)[0]
-
-        output[:, :4] = scale_coords(image.shape[2:], output[:, :4], image_labeled.shape).round()
-        for *xyxy, conf, cls in output:
-            label = f'{names[int(cls)]} {conf:.2f}'
-            plot_one_box(xyxy, image_labeled, label=label, color=colors[int(cls)], line_thickness=1)
-        
-        cv2.imshow("YOLOv7", image_labeled)
-
     # 0:left, 1:up, 2:right, 3:down
     # line ['line', [0123], [line_position]] 離牆30
     actions_melody = [
-        {'command': 'take_off'},
-        {'command': 'up_until_marker'},
-        {'command': 'follow_marker', 'marker_id': 2, 'distance': 30},
-        {'command': 'follow_line', 'direction': 0, 'expect_line': [0, 1, 0, 1, 1, 1, 0, 0, 0]},
-        {'command': 'follow_line', 'direction': 1, 'expect_line': [0, 0, 0, 1, 1, 0, 0, 1, 0]},
-        {'command': 'follow_line', 'direction': 0, 'expect_line': [0, 0, 0, 0, 1, 1, 0, 1, 0]},
-        {'command': 'follow_line', 'direction': 3, 'expect_line': [0, 1, 0, 1, 1, 1, 0, 0, 0]},
-        {'command': 'left', 'distance': 3},
-        {'command': 'land'}
     ]
 
     actions_carna = [
+    ]
+    
+    actions_lab10 = [
         {'command': 'take_off'},
         {'command': 'up_until_marker'},
-        {'command': 'follow_marker', 'marker_id': 2, 'distance': 30},
-        {'command': 'follow_line', 'direction': 0, 'expect_line': [0, 1, 0, 1, 1, 1, 0, 0, 0]},
-        {'command': 'follow_line', 'direction': 1, 'expect_line': [0, 0, 0, 1, 1, 0, 0, 1, 0]},
-        {'command': 'follow_line', 'direction': 0, 'expect_line': [0, 0, 0, 0, 1, 1, 0, 1, 0]},
-        {'command': 'follow_line', 'direction': 3, 'expect_line': [0, 1, 0, 1, 1, 1, 0, 0, 0]},
+        {'command': 'follow_marker', 'marker_id': 3, 'distance': 27},
+        {'command': 'follow_line', 'direction': 'right', 'expect_line': [0, 1, 0, 1, 1, 0, 0, 0, 0]},
+        {'command': 'follow_line', 'direction': 'up', 'expect_line': [0, 0, 0, 0, 1, 1, 0, 1, 0]},
+        {'command': 'follow_line', 'direction': 'right', 'expect_line': [0, 1, 0, 1, 1, 0, 0, 0, 0]},
+        {'command': 'follow_line', 'direction': 'up', 'expect_line': [1, 1, 0, 0, 1, 0, 0, 1, 0]},
+        {'command': 'follow_line', 'direction': 'left', 'expect_line': [0, 0, 0, 0, 1, 1, 0, 1, 0]},
+        {'command': 'follow_line', 'direction': 'down', 'expect_line': [0, 1, 0, 1, 1, 1, 0, 0, 0]},
         {'command': 'left', 'distance': 3},
         {'command': 'land'}
     ]
-
     
+    active_actions = actions_lab10
 
-    for action in actions:
+    # YOLOv7 detech object to decide which action to take
+    # WEIGHT = './best.pt'
+    # device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # model = attempt_load(WEIGHT, map_location=device)
+    # if device == "cuda":
+    #     model = model.half().to(device)
+    # else:
+    #     model = model.float().to(device)
+    # names = model.module.names if hasattr(model, 'module') else model.names
+    # colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
+    # while len(active_actions) == 0:
+    #     image = drone.frame_read.frame
+    #     image_labeled = image.copy()
+
+    #     image = letterbox(image, (640, 640), stride=64, auto=True)[0]
+    #     if device == "cuda":
+    #         image = transforms.ToTensor()(image).to(device).half().unsqueeze(0)
+    #     else:
+    #         image = transforms.ToTensor()(image).to(device).float().unsqueeze(0)
+
+    #     with torch.no_grad():
+    #         output = model(image)[0]
+    #     output = non_max_suppression_kpt(output, conf_thres=0.25, iou_thres=0.65)[0]
+
+    #     output[:, :4] = scale_coords(image.shape[2:], output[:, :4], image_labeled.shape).round()
+    #     for *xyxy, conf, cls in output:
+    #         label = f'{names[int(cls)]} {conf:.2f}'
+    #         if names[int(cls)] == 'carna':
+    #             active_actions = actions_carna
+    #             break
+    #         elif names[int(cls)] == 'melody':
+    #             active_actions = actions_melody
+    #             break 
+    #         plot_one_box(xyxy, image_labeled, label=label, color=colors[int(cls)], line_thickness=1)
+        
+    #     cv2.waitKey(3)
+    #     cv2.imshow("YOLOv7", image_labeled)
+    #     cv2.destroyWindow("YOLOv7")    
+
+    for action in active_actions:
         print('[Main loop] current_action:', action)
         drone.command_loop(**action)
 
