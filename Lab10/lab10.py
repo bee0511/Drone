@@ -56,6 +56,11 @@ class Drone:
     SCALING_FACTOR_Y = 0.4
     SCALING_FACTOR_Z = 0.3
 
+    previous_pattern_1 = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    previous_pattern_2 = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    previous_pattern_3 = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+    previous_pattern_4 = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+
     def __init__(self):
         self.fs = cv2.FileStorage("calibrate-01.xml", cv2.FILE_STORAGE_READ)
         self.intrinsic = self.fs.getNode("intrinsic").mat()
@@ -116,8 +121,8 @@ class Drone:
         height, width, _ = frame.shape
         cells = [
             frame[
-                i * height // 3 : (i + 1) * height // 3,
-                j * width // 3 : (j + 1) * width // 3,
+                i * height // 3: (i + 1) * height // 3,
+                j * width // 3: (j + 1) * width // 3,
             ]
             for i in range(3)
             for j in range(3)
@@ -141,109 +146,138 @@ class Drone:
 
         # Draw vertical lines to divide the frame into 3 columns
         cv2.line(frame, (width // 3, 0), (width // 3, height), (255, 0, 0), 2)
-        cv2.line(frame, (2 * width // 3, 0), (2 * width // 3, height), (255, 0, 0), 2)
+        cv2.line(frame, (2 * width // 3, 0),
+                 (2 * width // 3, height), (255, 0, 0), 2)
 
         # Draw horizontal lines to divide the frame into 3 rows
         cv2.line(frame, (0, height // 3), (width, height // 3), (255, 0, 0), 2)
-        cv2.line(frame, (0, 2 * height // 3), (width, 2 * height // 3), (255, 0, 0), 2)
+        cv2.line(frame, (0, 2 * height // 3),
+                 (width, 2 * height // 3), (255, 0, 0), 2)
 
         return frame
 
-    def follow_line(self, direction, expect_line) -> (bool, int, int, int, int):
+    def follow_line(self, cur_direction, next_direction) -> (bool, int, int, int, int):
         """
-        :param direction: 0:left, 1:up, 2:right, 3:down
-        :param expect_line: The line to follow
-        :return: True if the line is found and followed, False otherwise (vel_h, vel_z, vel_v, vel_y)
+        :param cur_direction: The current direction
+        :param next_direction: The next direction
+        :return: True if the feature is found and followed, False otherwise 
         """
         frame = self.frame_read.frame
-        line_now = self._detect_line_in_grid(self.frame_read.frame)
+        g = self._detect_line_in_grid(self.frame_read.frame)  # grids
 
         self._draw_grid(frame)
         cv2.imshow("follow_line", frame)
-        print("[follow_line] expect_line:", expect_line)
-        print("[follow_line] line_now:", line_now)
+        print("[follow_line] next_direction:", next_direction)
+        print("[follow_line] grids:", g)
+        print("[follow_line] direction:", cur_direction)
 
-        if direction == "left":
-            a, b, c, d = -10, 0, 0, 0
-        elif direction == "up":
-            a, b, c, d = 0, 0, 15, 0
-        elif direction == "right":
-            a, b, c, d = 10, 0, 0, 0
-        elif direction == "down":
-            a, b, c, d = 0, 0, -20, 0
+        a = b = c = d = 0
+        UP_SPD = 20
+        DOWN_SPD = -30
+        LEFT_SPD = -10
+        RIGHT_SPD = 10
+        BACK_SPD = -5
 
-        if expect_line == [0, 0, 0, 0, 1, 1, 0, 1, 0] and direction == "up":  # 『
-            if line_now == [0, 1, 1, 0, 1, 0, 0, 1, 0]: # continue up
-                a, b, c, d = 0, 0, 10, 0
-            elif line_now == [0, 0, 0, 0, 0, 0, 0, 1, 1]: # too high, come down
-                a, b, c, d = 0, 0, -5, 0
-            elif line_now == [0, 1, 0, 0, 1, 0, 0, 1, 0]: # right in the middle, continue up 
-                a, b, c, d = 0, 0, 5, 0
-            elif line_now == [0, 0, 0, 0, 0, 1, 0, 0, 1]: # too left, go right 
-                a, b, c, d == 5, 0, 0, 0
-            elif line_now == [1, 0, 0, 1, 0, 0, 1, 0, 0]: # too right, go left
-                a, b, c, d == -5, 0, 0, 0
-            elif line_now == [0, 0, 1, 0, 0, 1, 0, 0, 1]: # too left, go right 
-                a, b, c, d == 5, 0, 0, 0
-        elif expect_line == [0, 0, 0, 0, 1, 1, 0, 1, 0] and direction == "left":  # 『
-            if line_now == [1, 1, 1, 0, 0, 0, 0, 0, 0]: # too low, go up
-                a, b, c, d = 0, 0, 10, 0
-            elif line_now == [0, 0, 0, 0, 0, 0, 1, 1, 1]: # too high, go down
-                a, b, c, d = 0, 0, -10, 0
-            elif line_now == [0, 0, 0, 1, 1, 1, 1, 0, 0]: # too right, go left
-                a, b, c, d = -5, 0, 0, 0
-            elif line_now == [0, 0, 0, 0, 0, 1, 0, 0, 1]: # too left, go right 
-                a, b, c, d = 5, 0, 0, 0
-            elif line_now == [0, 1, 1, 0, 1, 0, 0, 1, 0]: # too down, go up
-                a, b, c, d = 0, 0, 10, 0
-            elif line_now == [0, 0, 0, 0, 0, 0, 0, 1, 1]: # too high, go down
-                a, b, c, d = 0, 0, -10, 0
-        elif expect_line == [0, 1, 0, 1, 1, 0, 0, 0, 0] and direction == "right":  # 』
-            if line_now == [0, 1, 0, 0, 1, 0, 1, 1, 0]: # too high, go down
-                a, b, c, d = 0, 0, -10, 0
-            elif line_now == [1, 1, 0, 0, 0, 0, 0, 0, 0]: # too low, go up 
-                a, b, c, d = 0, 0, 10, 0
-            elif line_now == [1, 0, 0, 1, 0, 0, 0, 0, 0]: # too right, go left
-                a, b, c, d = -5, 0, 0, 0
-            elif line_now == [1, 1, 1, 0, 0, 0, 0, 0, 0]: # too low, go up 
-                a, b, c, d = 0, 0, 10, 0
-            elif line_now == [0, 0, 0, 0, 0, 0, 1, 1, 1]: # too high, go down
-                a, b, c, d = 0, 0, -10, 0
-            elif line_now == [0, 0, 1, 1, 1, 1, 0, 0, 0]: # continue to go right 
-                a, b, c, d = 5, 0, 0, 0
-            #elif line_now == [0, 1, 0, 0, 1, 0, 0, 1, 0]: # only when coming from up to down 
-                #a, b, c, d = 0, 0, -5, 0
-        elif expect_line == [0, 0, 0, 1, 1, 0, 0, 1, 0] and direction == "up":  # 7
-            if line_now == [0, 0, 0, 1, 0, 0, 1, 0, 0]: # too right, go left
-                a, b, c, d = -5, 0, 0, 0
-            elif line_now == [0, 0, 0, 1, 1, 1, 0, 0, 1]: # too left, go right
-                a, b, c, d = 5, 0, 0, 0
-            elif line_now == [1, 0, 0, 1, 0, 0, 1, 0, 0]: # too right, go left
-                a, b, c, d = -5, 0, 0, 0
-            elif line_now == [1, 1, 0, 0, 1, 0, 0, 1, 0]: # continue to go up
-                a, b, c, d = 0, 0, 10, 0
-            elif line_now == [0, 0, 0, 0, 0, 0, 1, 1, 0]: # too high, go down
-                a, b, c, d = 0, 0, -10, 0
-            elif line_now == [0, 0, 1, 0, 0, 1, 0, 0, 1]: # too left, go right
-                a, b, c, d = 5, 0, 0, 0
+        # count the number of 1 in g
+        count = 0
+        for i in g:
+            if i == 1:
+                count += 1
+        if count == 0:
+            # No black line detected, stay still
+            return False, 0, 0, 0, 0
+        if count > 5:  # Too close, go backward
+            b = BACK_SPD
 
-        # elif expect_line == [0, 1, 0, 1, 1, 1, 0, 0, 0]:
-        #     if line_now == [1, 1, 1, 0, 0, 0, 0, 0, 0]:
-        #         a, b, c, d = 0, 0, 5, 0
-        #     elif line_now == [0, 1, 0, 0, 1, 0, 1, 1, 1]:
-        #         a, b, c, d = 0, 0, -5, 0
-        #     elif line_now == [1, 0, 0, 1, 0, 0, 1, 1, 1]:
-        #         a, b, c, d = -5, 0, -5, 0
-        #     elif line_now == [0, 0, 1, 0, 0, 1, 1, 1, 1]:
-        #         a, b, c, d = 5, 0, -5, 0
-        #     elif line_now == [0, 0, 1, 1, 1, 1, 0, 0, 0]:
-        #         a, b, c, d = 5, 0, 0, 0
-        #     elif line_now == [1, 0, 0, 1, 1, 1, 0, 0, 0]:
-        #         a, b, c, d = -5, 0, 0, 0
+        if cur_direction == "left":
+            a = LEFT_SPD
+        elif cur_direction == "up":
+            c = UP_SPD
+        elif cur_direction == "right":
+            a = RIGHT_SPD
+        elif cur_direction == "down":
+            c = DOWN_SPD
+        
 
-        if line_now == expect_line:
-            print("[follow_line] line found!")
-            return True, 0, 0, 0, 0
+        # Check feature
+        if cur_direction == "right" and next_direction == "up":
+            if (g[1] and g[3] and g[4]) or (g[2] and g[3] and g[4] and g[5]) or (g[1] and g[4] and g[6] and g[7]) or (g[2] and g[5] and g[6] and g[7] and g[8]):
+                # save all kinds of patterns, for example, g[1] and g[3] and g[4] means the pattern is [0, 1, 0, 1, 1, 0, 0, 0, 0]
+                self.previous_pattern_1 = [0, 1, 0, 1, 1, 0, 0, 0, 0]
+                self.previous_pattern_2 = [0, 0, 1, 1, 1, 1, 0, 0, 0]
+                self.previous_pattern_3 = [0, 1, 0, 0, 1, 0, 1, 1, 0]
+                self.previous_pattern_4 = [0, 0, 1, 0, 1, 0, 1, 1, 1]
+                return True, 0, 0, 0, 0
+            elif (g[0] or g[1] or g[2]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                # Go up
+                c = UP_SPD
+            elif (g[6] or g[7] or g[8]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                # Go down
+                c = DOWN_SPD
+
+        if cur_direction == "up" and next_direction == "right":
+            if (g[1] and g[3] and g[4]) or (g[2] and g[3] and g[4] and g[5]) or (g[1] and g[4] and g[6] and g[7]) or (g[2] and g[5] and g[6] and g[7] and g[8]):
+                self.previous_pattern_1 = [0, 1, 0, 1, 1, 0, 0, 0, 0]
+                self.previous_pattern_2 = [0, 0, 1, 1, 1, 1, 0, 0, 0]
+                self.previous_pattern_3 = [0, 1, 0, 0, 1, 0, 1, 1, 0]
+                self.previous_pattern_4 = [0, 0, 1, 0, 1, 0, 1, 1, 1]
+                return True, 0, 0, 0, 0
+            elif (g[0] or g[3] or g[6]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                a = LEFT_SPD
+            elif (g[2] or g[5] or g[8]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                a = RIGHT_SPD
+
+        if cur_direction == "up" and next_direction == "left":
+            if (g[3] and g[4] and g[7]) or (g[0] and g[1] and g[4] and g[7]) or (g[3] and g[4] and g[5] and g[8]) or (g[0] and g[1] and g[2] and g[5] and g[8]):
+                self.previous_pattern_1 = [0, 0, 0, 1, 1, 0, 1, 1, 0]
+                self.previous_pattern_2 = [1, 1, 0, 0, 1, 0, 0, 1, 0]
+                self.previous_pattern_3 = [0, 0, 0, 1, 1, 1, 0, 0, 0]
+                self.previous_pattern_4 = [1, 1, 1, 0, 0, 1, 0, 0, 1]
+                return True, 0, 0, 0, 0
+            elif (g[0] or g[3] or g[6]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                a = LEFT_SPD
+            elif (g[2] or g[5] or g[8]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                a = RIGHT_SPD
+
+        if cur_direction == "left" and next_direction == "down":
+            if (g[4] and g[5] and g[7]) or (g[3] and g[4] and g[5] and g[6]) or (g[1] and g[2] and g[4] and g[7]) or (g[0] and g[1] and g[2] and g[3] and g[6]):
+                self.previous_pattern_1 = [0, 0, 0, 0, 1, 1, 0, 1, 0]
+                self.previous_pattern_2 = [0, 0, 0, 1, 1, 1, 1, 0, 0]
+                self.previous_pattern_3 = [0, 1, 1, 0, 1, 0, 0, 1, 0]
+                self.previous_pattern_4 = [1, 1, 1, 1, 0, 0, 1, 0, 0]
+                return True, 0, 0, 0, 0
+            elif (g[0] or g[1] or g[2]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                # Go up
+                c = UP_SPD
+            elif (g[6] or g[7] or g[8]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                # Go down
+                c = DOWN_SPD
+
+        if cur_direction == "left" and next_direction == "up":
+            if (g[1] and g[4] and g[5]) or (g[0] and g[3] and g[4] and g[5]) or (g[1] and g[4] and g[7] and g[8]) or (g[0] and g[3] and g[6] and g[7] and g[8]):
+                self.previous_pattern_1 = [0, 1, 0, 0, 1, 1, 0, 0, 0]
+                self.previous_pattern_2 = [1, 0, 0, 1, 1, 0, 0, 0, 0]
+                self.previous_pattern_3 = [0, 1, 0, 0, 1, 0, 0, 1, 1]
+                self.previous_pattern_4 = [1, 0, 0, 1, 0, 0, 1, 1, 1]
+                return True, 0, 0, 0, 0
+            elif (g[0] or g[1] or g[2]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                # Go up
+                c = UP_SPD
+            elif (g[6] or g[7] or g[8]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                # Go down
+                c = DOWN_SPD
+
+        if cur_direction == "down" and next_direction == "left":
+            if (g[1] and g[3] and g[4]) or (g[1] and g[4] and g[6] and g[7]) or (g[2] and g[3] and g[4] and g[5]) or (g[2] and g[5] and g[6] and g[7] and g[8]):
+                self.previous_pattern_1 = [0, 1, 0, 1, 1, 0, 0, 0, 0]
+                self.previous_pattern_2 = [0, 0, 1, 1, 1, 1, 0, 0, 0]
+                self.previous_pattern_3 = [0, 1, 0, 0, 1, 0, 1, 1, 0]
+                self.previous_pattern_4 = [0, 0, 1, 0, 1, 0, 1, 1, 1]
+                return True, 0, 0, 0, 0
+            elif (g[0] or g[3] or g[6]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                a = LEFT_SPD
+            elif (g[2] or g[5] or g[8]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                a = RIGHT_SPD
 
         return False, a, b, c, d
 
@@ -270,13 +304,16 @@ class Drone:
 
         for i in range(len(markerIds)):
             if markerIds[i] == marker_id:
-                center_x = (markerCorners[i][0][0][0] + markerCorners[i][0][2][0]) / 2
-                center_y = (markerCorners[i][0][0][1] + markerCorners[i][0][2][1]) / 2
+                center_x = (markerCorners[i][0][0]
+                            [0] + markerCorners[i][0][2][0]) / 2
+                center_y = (markerCorners[i][0][0]
+                            [1] + markerCorners[i][0][2][1]) / 2
                 horizontal_offset = center_x - frame_width / 2
                 vertical_offset = -1 * (center_y - frame_height / 2)
 
                 horizontal_update = horizontal_offset * self.SCALING_FACTOR_H
-                vertical_update = (vertical_offset - 20) * self.SCALING_FACTOR_Y
+                vertical_update = (vertical_offset - 20) * \
+                    self.SCALING_FACTOR_Y
 
                 rot_mat, _ = cv2.Rodrigues(rvec[i])
                 euler_angles = cv2.RQDecomp3x3(rot_mat)
@@ -329,7 +366,8 @@ class Drone:
         return False, 0, 0, 0, 0
 
     def follow_face(self) -> (bool, int, int, int, int):
-        face_cascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+        face_cascade = cv2.CascadeClassifier(
+            "haarcascade_frontalface_default.xml")
         frame = self.frame_read.frame
         faces = face_cascade.detectMultiScale(
             frame, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40)
@@ -349,15 +387,17 @@ class Drone:
             p3 = (int(x - 1 / 2 * w), int(y + h / 2 + h))
             p4 = (int(x + 3 / 2 * w), int(y + h / 2 + black_line_wid + h))
             black_space = [(p1, p2), (p3, p4)]
-            cv2.rectangle(frame, black_space[0][0], black_space[0][1], (0, 0, 0), 2)
-            cv2.rectangle(frame, black_space[1][0], black_space[1][1], (0, 0, 0), 2)
+            cv2.rectangle(frame, black_space[0][0],
+                          black_space[0][1], (0, 0, 0), 2)
+            cv2.rectangle(frame, black_space[1][0],
+                          black_space[1][1], (0, 0, 0), 2)
             roi1 = frame[
-                black_space[0][0][0] : black_space[0][1][0],
-                black_space[0][0][1] : black_space[0][1][1],
+                black_space[0][0][0]: black_space[0][1][0],
+                black_space[0][0][1]: black_space[0][1][1],
             ]
             roi2 = frame[
-                black_space[1][0][0] : black_space[1][1][0],
-                black_space[1][0][1] : black_space[1][1][1],
+                black_space[1][0][0]: black_space[1][1][0],
+                black_space[1][0][1]: black_space[1][1][1],
             ]
             avg_c1 = roi1.mean(axis=(0, 1))
             avg_c2 = roi2.mean(axis=(0, 1))
@@ -440,7 +480,8 @@ class Drone:
 
             if horizontal_offset < 3 and vertical_offset < 3:
                 yaw_offset = (
-                    two_face[0][2] * two_face[0][3] - two_face[1][2] * two_face[1][3]
+                    two_face[0][2] * two_face[0][3] -
+                    two_face[1][2] * two_face[1][3]
                 )
             else:
                 yaw_offset = 0
@@ -496,12 +537,12 @@ class Drone:
         marker_id=0,
         direction=0,
         distance=0,
-        expect_line=[0, 1, 0, 1, 1, 1, 0, 0, 0],
+        next_direction=0,
     ):
         """
         This part control the drone and handle the keyboard input at the same time
         """
-        print(command, marker_id, direction, distance, expect_line)
+        # print(command, marker_id, direction, distance, next_direction)
         while True:
             frame = self.frame_read.frame
             key = cv2.waitKey(10)
@@ -544,7 +585,8 @@ class Drone:
                     self.send_control(0, 0, 0, 0)
                     return
             elif command == "follow_marker":
-                is_success, h, z, v, y = self.follow_marker(marker_id, distance)
+                is_success, h, z, v, y = self.follow_marker(
+                    marker_id, distance)
                 if is_success:
                     self.send_control(0, 0, 0, 0)
                     return
@@ -556,7 +598,8 @@ class Drone:
                     return
                 self.send_control(h, z, v, y)
             elif command == "follow_line":
-                is_success, h, z, v, y = self.follow_line(direction, expect_line)
+                is_success, h, z, v, y = self.follow_line(
+                    direction, next_direction)
                 if is_success:
                     self.send_control(0, 0, 0, 0)
                     return
@@ -582,32 +625,32 @@ def main():
         {
             "command": "follow_line",
             "direction": "right",
-            "expect_line": [0, 1, 0, 1, 1, 0, 0, 0, 0],
+            "next_direction": "up",
         },
         {
             "command": "follow_line",
             "direction": "up",
-            "expect_line": [0, 0, 0, 0, 1, 1, 0, 1, 0],
+            "next_direction": "right",
         },
         {
             "command": "follow_line",
             "direction": "right",
-            "expect_line": [0, 1, 0, 1, 1, 0, 0, 0, 0],
+            "next_direction": "up",
         },
         {
             "command": "follow_line",
             "direction": "up",
-            "expect_line": [1, 1, 0, 0, 1, 0, 0, 1, 0],
+            "next_direction": "left",
         },
         {
             "command": "follow_line",
             "direction": "left",
-            "expect_line": [0, 0, 0, 0, 1, 1, 0, 1, 0],
+            "next_direction": "down",
         },
         {
             "command": "follow_line",
             "direction": "down",
-            "expect_line": [0, 1, 0, 1, 1, 1, 0, 0, 0],
+            "next_direction": "right",
         },
         {"command": "follow_marker", "marker_id": 3, "distance": 50},
         {"command": "land"},
