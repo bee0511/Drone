@@ -10,6 +10,11 @@ from otsu import *
 KERNEL_SIZE = 3
 CALIBRATE_FILE = "calibrate-01.xml"
 MAX_SPEED_THRESHOLD = 25
+HORIZONTAL_OFFSET = 25
+VERTICAL_UPWARD_OFFSET = 15
+VERTICAL_DOWNWARD_BOOST = 60
+
+SCALING_FACTOR_YAW = 1.2
 
 # Check calibration file exists
 if not os.path.isfile(CALIBRATE_FILE):
@@ -25,12 +30,11 @@ dictionary = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
 # Initialize the detector parameters using default values
 parameters = cv2.aruco.DetectorParameters_create()
 
-pid_controller_x = PID(kP=0.7, kI=0.0001, kD=0.1)
-pid_controller_y = PID(kP=0.7, kI=0.0001, kD=0.1)
-pid_controller_z = PID(kP=0.7, kI=0.0001, kD=0.1)
-yaw_controller_pid = PID(kP=0.7, kI=0.0001, kD=0.1)
+pid_horizontal = PID(kP=0.7, kI=0.0001, kD=0.1)
+pid_vertical = PID(kP=0.7, kI=0.0001, kD=0.1)
+pid_z = PID(kP=0.7, kI=0.0001, kD=0.1)
+pid_yaw = PID(kP=0.7, kI=0.0001, kD=0.1)
 height_controller_pid = PID(kP=0.7, kI=0.0001, kD=0.1)
-
 
 def clamping(val):
     if val > MAX_SPEED_THRESHOLD:
@@ -38,12 +42,6 @@ def clamping(val):
     elif val < -MAX_SPEED_THRESHOLD:
         return -MAX_SPEED_THRESHOLD
     return int(val)
-
-
-K_X_OFFSET = 25
-K_Y_UPWARD_OFFSET = 15
-K_Y_DOWNWARD_BOOST = 60
-
 
 def tracking_aruco(frame, marker_id, z_distance):
     # Make a copy of frame
@@ -56,7 +54,7 @@ def tracking_aruco(frame, marker_id, z_distance):
         markerCorners, 15, intrinsic, distortion
     )
     z_update = None
-    y_update = None
+    v_update = None
     yaw_update = None
 
     # If we see some markers
@@ -90,21 +88,22 @@ def tracking_aruco(frame, marker_id, z_distance):
 
         rotation_matrix = np.zeros(shape=(3, 3))
         cv2.Rodrigues(rvec[i], rotation_matrix, jacobian=0)
-
         ypr = cv2.RQDecomp3x3(rotation_matrix)[0]
-        yaw_error = ypr[1]
-        x_error = tvec[0, 0, 0] - K_X_OFFSET
-        if tvec[0, 0, 1] - K_Y_UPWARD_OFFSET < 0:
-            y_error = -(tvec[0, 0, 1] - K_Y_UPWARD_OFFSET)
-        else:
-            y_error = tvec[0, 0, 1] - K_Y_DOWNWARD_BOOST
         z_error = tvec[0, 0, 2] - z_distance
+        yaw_error = ypr[1] * SCALING_FACTOR_YAW
+        horizontal_error = tvec[0, 0, 0] - HORIZONTAL_OFFSET
+        vertical_error = tvec[0, 0, 1]
+        if vertical_error - VERTICAL_UPWARD_OFFSET < 0:
+            y_error = -(vertical_error - VERTICAL_UPWARD_OFFSET)
+        else:
+            y_error = vertical_error - VERTICAL_DOWNWARD_BOOST
 
-        x_update = clamping(pid_controller_x.update(x_error, sleep=0))
-        y_update = clamping(pid_controller_y.update(y_error, sleep=0))
-        z_update = clamping(pid_controller_z.update(z_error, sleep=0))
-        yaw_update = clamping(yaw_controller_pid.update(-(yaw_error + 3), sleep=0))
-        return (modified_frame, x_update, y_update, z_update, yaw_update, tvec[0, 0, 2])
+        h_update = clamping(pid_horizontal.update(horizontal_error, sleep=0))
+        v_update = clamping(pid_vertical.update(y_error, sleep=0))
+        z_update = clamping(pid_z.update(z_error, sleep=0))
+        yaw_update = clamping(pid_yaw.update(yaw_error, sleep=0))
+        return (modified_frame, h_update, v_update, z_update, yaw_update, tvec[0, 0, 2])
+
     return None
 
 
@@ -248,10 +247,10 @@ class LineFollower:
 
 
 def main():
-    pid_controller_x.initialize()
-    pid_controller_y.initialize()
-    pid_controller_z.initialize()
-    yaw_controller_pid.initialize()
+    pid_horizontal.initialize()
+    pid_vertical.initialize()
+    pid_z.initialize()
+    pid_yaw.initialize()
     # Tello SDK
     drone = Tello()
     drone.connect()
