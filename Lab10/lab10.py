@@ -172,44 +172,74 @@ class Drone:
         elif direction == "down":
             a, b, c, d = 0, 0, -20, 0
 
-        if expect_line == [0, 0, 0, 0, 1, 1, 0, 1, 0]:  # 『
-            if line_now == [0, 1, 1, 0, 1, 0, 0, 1, 0]:
+        if expect_line == [0, 0, 0, 0, 1, 1, 0, 1, 0] and direction == "up":  # 『
+            if line_now == [0, 1, 1, 0, 1, 0, 0, 1, 0]: # continue up
                 a, b, c, d = 0, 0, 10, 0
-            elif line_now == [0, 0, 0, 0, 0, 0, 0, 1, 1]:
+            elif line_now == [0, 0, 0, 0, 0, 0, 0, 1, 1]: # too high, come down
                 a, b, c, d = 0, 0, -5, 0
-            elif line_now == [0, 1, 0, 0, 1, 0, 0, 1, 0]:
+            elif line_now == [0, 1, 0, 0, 1, 0, 0, 1, 0]: # right in the middle, continue up 
                 a, b, c, d = 0, 0, 5, 0
-            elif line_now == [0, 0, 0, 0, 0, 1, 0, 0, 1]:
+            elif line_now == [0, 0, 0, 0, 0, 1, 0, 0, 1]: # too left, go right 
                 a, b, c, d == 5, 0, 0, 0
-            elif line_now == [0, 0, 0, 0, 1, 1, 0, 0, 0]:
-                a, b, c, d == 0, 5, 0, 0
-        elif expect_line == [0, 1, 0, 1, 1, 0, 0, 0, 0]:  # 』
-            if line_now == [0, 1, 0, 0, 1, 0, 1, 1, 0]:
-                a, b, c, d = 0, 0, -5, 0
-            elif line_now == [1, 1, 0, 0, 0, 0, 0, 0, 0]:
-                a, b, c, d = 0, 0, 5, 0
-            elif line_now == [1, 0, 0, 1, 0, 0, 0, 0, 0]:
+            elif line_now == [1, 0, 0, 1, 0, 0, 1, 0, 0]: # too right, go left
+                a, b, c, d == -5, 0, 0, 0
+            elif line_now == [0, 0, 1, 0, 0, 1, 0, 0, 1]: # too left, go right 
+                a, b, c, d == 5, 0, 0, 0
+        elif expect_line == [0, 0, 0, 0, 1, 1, 0, 1, 0] and direction == "left":  # 『
+            if line_now == [1, 1, 1, 0, 0, 0, 0, 0, 0]: # too low, go up
+                a, b, c, d = 0, 0, 10, 0
+            elif line_now == [0, 0, 0, 0, 0, 0, 1, 1, 1]: # too high, go down
+                a, b, c, d = 0, 0, -10, 0
+            elif line_now == [0, 0, 0, 1, 1, 1, 1, 0, 0]: # too right, go left
                 a, b, c, d = -5, 0, 0, 0
-            elif line_now == [0, 1, 0, 0, 1, 0, 0, 1, 0]:
-                a, b, c, d = 0, 0, -5, 0
-        elif expect_line == [0, 0, 0, 1, 1, 0, 0, 1, 0]:  # 7
-            if line_now == [0, 0, 0, 1, 0, 0, 1, 0, 0]:
-                a, b, c, d = -5, 0, 0, 0
-            elif line_now == [0, 0, 0, 1, 1, 1, 0, 0, 1]:
+            elif line_now == [0, 0, 0, 0, 0, 1, 0, 0, 1]: # too left, go right 
                 a, b, c, d = 5, 0, 0, 0
-        elif expect_line == [0, 1, 0, 1, 1, 1, 0, 0, 0]:
-            if line_now == [1, 1, 1, 0, 0, 0, 0, 0, 0]:
-                a, b, c, d = 0, 0, 5, 0
-            elif line_now == [0, 1, 0, 0, 1, 0, 1, 1, 1]:
-                a, b, c, d = 0, 0, -5, 0
-            elif line_now == [1, 0, 0, 1, 0, 0, 1, 1, 1]:
-                a, b, c, d = -5, 0, -5, 0
-            elif line_now == [0, 0, 1, 0, 0, 1, 1, 1, 1]:
-                a, b, c, d = 5, 0, -5, 0
-            elif line_now == [0, 0, 1, 1, 1, 1, 0, 0, 0]:
-                a, b, c, d = 5, 0, 0, 0
-            elif line_now == [1, 0, 0, 1, 1, 1, 0, 0, 0]:
+            elif line_now == [0, 1, 1, 0, 1, 0, 0, 1, 0]: # too down, go up
+                a, b, c, d = 0, 0, 10, 0
+            elif line_now == [0, 0, 0, 0, 0, 0, 0, 1, 1]: # too high, go down
+                a, b, c, d = 0, 0, -10, 0
+        elif expect_line == [0, 1, 0, 1, 1, 0, 0, 0, 0] and direction == "right":  # 』
+            if line_now == [0, 1, 0, 0, 1, 0, 1, 1, 0]: # too high, go down
+                a, b, c, d = 0, 0, -10, 0
+            elif line_now == [1, 1, 0, 0, 0, 0, 0, 0, 0]: # too low, go up 
+                a, b, c, d = 0, 0, 10, 0
+            elif line_now == [1, 0, 0, 1, 0, 0, 0, 0, 0]: # too right, go left
                 a, b, c, d = -5, 0, 0, 0
+            elif line_now == [1, 1, 1, 0, 0, 0, 0, 0, 0]: # too low, go up 
+                a, b, c, d = 0, 0, 10, 0
+            elif line_now == [0, 0, 0, 0, 0, 0, 1, 1, 1]: # too high, go down
+                a, b, c, d = 0, 0, -10, 0
+            elif line_now == [0, 0, 1, 1, 1, 1, 0, 0, 0]: # continue to go right 
+                a, b, c, d = 5, 0, 0, 0
+            #elif line_now == [0, 1, 0, 0, 1, 0, 0, 1, 0]: # only when coming from up to down 
+                #a, b, c, d = 0, 0, -5, 0
+        elif expect_line == [0, 0, 0, 1, 1, 0, 0, 1, 0] and direction == "up":  # 7
+            if line_now == [0, 0, 0, 1, 0, 0, 1, 0, 0]: # too right, go left
+                a, b, c, d = -5, 0, 0, 0
+            elif line_now == [0, 0, 0, 1, 1, 1, 0, 0, 1]: # too left, go right
+                a, b, c, d = 5, 0, 0, 0
+            elif line_now == [1, 0, 0, 1, 0, 0, 1, 0, 0]: # too right, go left
+                a, b, c, d = -5, 0, 0, 0
+            elif line_now == [1, 1, 0, 0, 1, 0, 0, 1, 0]: # continue to go up
+                a, b, c, d = 0, 0, 10, 0
+            elif line_now == [0, 0, 0, 0, 0, 0, 1, 1, 0]: # too high, go down
+                a, b, c, d = 0, 0, -10, 0
+            elif line_now == [0, 0, 1, 0, 0, 1, 0, 0, 1]: # too left, go right
+                a, b, c, d = 5, 0, 0, 0
+
+        # elif expect_line == [0, 1, 0, 1, 1, 1, 0, 0, 0]:
+        #     if line_now == [1, 1, 1, 0, 0, 0, 0, 0, 0]:
+        #         a, b, c, d = 0, 0, 5, 0
+        #     elif line_now == [0, 1, 0, 0, 1, 0, 1, 1, 1]:
+        #         a, b, c, d = 0, 0, -5, 0
+        #     elif line_now == [1, 0, 0, 1, 0, 0, 1, 1, 1]:
+        #         a, b, c, d = -5, 0, -5, 0
+        #     elif line_now == [0, 0, 1, 0, 0, 1, 1, 1, 1]:
+        #         a, b, c, d = 5, 0, -5, 0
+        #     elif line_now == [0, 0, 1, 1, 1, 1, 0, 0, 0]:
+        #         a, b, c, d = 5, 0, 0, 0
+        #     elif line_now == [1, 0, 0, 1, 1, 1, 0, 0, 0]:
+        #         a, b, c, d = -5, 0, 0, 0
 
         if line_now == expect_line:
             print("[follow_line] line found!")
