@@ -200,7 +200,7 @@ class Drone:
         
 
         # Check feature
-        if cur_direction == "right" and next_direction == "up":
+        if cur_direction == "right" and next_direction == "up": # 」↑
             if (g[1] and g[3] and g[4]) or (g[2] and g[3] and g[4] and g[5]) or (g[1] and g[4] and g[6] and g[7]) or (g[2] and g[5] and g[6] and g[7] and g[8]):
                 # save all kinds of patterns, for example, g[1] and g[3] and g[4] means the pattern is [0, 1, 0, 1, 1, 0, 0, 0, 0]
                 self.previous_pattern_1 = [0, 1, 0, 1, 1, 0, 0, 0, 0]
@@ -209,14 +209,12 @@ class Drone:
                 self.previous_pattern_4 = [0, 0, 1, 0, 1, 0, 1, 1, 1]
                 return True, 0, 0, 0, 0
             elif (g[0] or g[1] or g[2]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
-                # Go up
-                c = UP_SPD
+                c = UP_SPD 
             elif (g[6] or g[7] or g[8]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
-                # Go down
-                c = DOWN_SPD
+                c = DOWN_SPD 
 
-        if cur_direction == "up" and next_direction == "right":
-            if (g[1] and g[3] and g[4]) or (g[2] and g[3] and g[4] and g[5]) or (g[1] and g[4] and g[6] and g[7]) or (g[2] and g[5] and g[6] and g[7] and g[8]):
+        elif cur_direction == "down" and next_direction == "left": # 」←
+            if (g[1] and g[3] and g[4]) or (g[2] and g[3] and g[4] and g[5]) or (g[1] and g[4] and g[6] and g[7])  or (g[2] and g[5] and g[6] and g[7] and g[8]):
                 self.previous_pattern_1 = [0, 1, 0, 1, 1, 0, 0, 0, 0]
                 self.previous_pattern_2 = [0, 0, 1, 1, 1, 1, 0, 0, 0]
                 self.previous_pattern_3 = [0, 1, 0, 0, 1, 0, 1, 1, 0]
@@ -227,11 +225,47 @@ class Drone:
             elif (g[2] or g[5] or g[8]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
                 a = RIGHT_SPD
 
-        if cur_direction == "up" and next_direction == "left":
+        elif cur_direction == "left" and next_direction == "down": # 「 ↓
+            if (g[4] and g[5] and g[7]) or (g[1] and g[2] and g[4] and g[7]) or (g[3] and g[4] and g[5] and g[6]) or (g[0] and g[1] and g[2] and g[3] and g[6]):
+                self.previous_pattern_1 = [0, 0, 0, 0, 1, 1, 0, 1, 0]
+                self.previous_pattern_2 = [0, 1, 1, 0, 1, 0, 0, 1, 0]
+                self.previous_pattern_3 = [0, 0, 0, 1, 1, 1, 1, 0, 0]
+                self.previous_pattern_4 = [1, 1, 1, 1, 0, 0, 1, 0, 0]
+                return True, 0, 0, 0, 0
+            elif (g[0] or g[1] or g[2]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                c = UP_SPD
+            elif (g[6] or g[7] or g[8]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                c = DOWN_SPD
+
+        elif cur_direction == "up" and next_direction == "right": # 「 →
+            if (g[4] and g[5] and g[7]) or (g[1] and g[2] and g[4] and g[7]) or (g[3] and g[4] and g[5] and g[6]) or (g[0] and g[1] and g[2] and g[3] and g[6]):
+                self.previous_pattern_1 = [0, 0, 0, 0, 1, 1, 0, 1, 0]
+                self.previous_pattern_2 = [0, 1, 1, 0, 1, 0, 0, 1, 0]
+                self.previous_pattern_3 = [0, 0, 0, 1, 1, 1, 1, 0, 0]
+                self.previous_pattern_4 = [1, 1, 1, 1, 0, 0, 1, 0, 0]
+                return True, 0, 0, 0, 0
+            elif (g[0] or g[3] or g[6]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                a = LEFT_SPD
+            elif (g[2] or g[5] or g[8]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                a = RIGHT_SPD
+
+        elif cur_direction == "up" and next_direction == "left": # 7 ↓
             if (g[3] and g[4] and g[7]) or (g[0] and g[1] and g[4] and g[7]) or (g[3] and g[4] and g[5] and g[8]) or (g[0] and g[1] and g[2] and g[5] and g[8]):
-                self.previous_pattern_1 = [0, 0, 0, 1, 1, 0, 1, 1, 0]
+                self.previous_pattern_1 = [0, 0, 0, 1, 1, 0, 0, 1, 0]
                 self.previous_pattern_2 = [1, 1, 0, 0, 1, 0, 0, 1, 0]
-                self.previous_pattern_3 = [0, 0, 0, 1, 1, 1, 0, 0, 0]
+                self.previous_pattern_3 = [0, 0, 0, 1, 1, 1, 0, 0, 1]
+                self.previous_pattern_4 = [1, 1, 1, 0, 0, 1, 0, 0, 1]
+                return True, 0, 0, 0, 0
+            elif (g[0] or g[1] or g[2]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                c = UP_SPD
+            elif (g[6] or g[7] or g[8]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
+                c = DOWN_SPD
+
+        elif cur_direction == "right" and next_direction == "down": # 7 ←
+            if (g[3] and g[4] and g[7]) or (g[0] and g[1] and g[4] and g[7]) or (g[3] and g[4] and g[5] and g[8]) or (g[0] and g[1] and g[2] and g[5] and g[8]):
+                self.previous_pattern_1 = [0, 0, 0, 1, 1, 0, 0, 1, 0]
+                self.previous_pattern_2 = [1, 1, 0, 0, 1, 0, 0, 1, 0]
+                self.previous_pattern_3 = [0, 0, 0, 1, 1, 1, 0, 0, 1]
                 self.previous_pattern_4 = [1, 1, 1, 0, 0, 1, 0, 0, 1]
                 return True, 0, 0, 0, 0
             elif (g[0] or g[3] or g[6]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
@@ -239,24 +273,10 @@ class Drone:
             elif (g[2] or g[5] or g[8]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
                 a = RIGHT_SPD
 
-        if cur_direction == "left" and next_direction == "down":
-            if (g[4] and g[5] and g[7]) or (g[3] and g[4] and g[5] and g[6]) or (g[1] and g[2] and g[4] and g[7]) or (g[0] and g[1] and g[2] and g[3] and g[6]):
-                self.previous_pattern_1 = [0, 0, 0, 0, 1, 1, 0, 1, 0]
-                self.previous_pattern_2 = [0, 0, 0, 1, 1, 1, 1, 0, 0]
-                self.previous_pattern_3 = [0, 1, 1, 0, 1, 0, 0, 1, 0]
-                self.previous_pattern_4 = [1, 1, 1, 1, 0, 0, 1, 0, 0]
-                return True, 0, 0, 0, 0
-            elif (g[0] or g[1] or g[2]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
-                # Go up
-                c = UP_SPD
-            elif (g[6] or g[7] or g[8]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
-                # Go down
-                c = DOWN_SPD
-
-        if cur_direction == "left" and next_direction == "up":
+        elif cur_direction == "left" and next_direction == "up": # L ↑
             if (g[1] and g[4] and g[5]) or (g[0] and g[3] and g[4] and g[5]) or (g[1] and g[4] and g[7] and g[8]) or (g[0] and g[3] and g[6] and g[7] and g[8]):
                 self.previous_pattern_1 = [0, 1, 0, 0, 1, 1, 0, 0, 0]
-                self.previous_pattern_2 = [1, 0, 0, 1, 1, 0, 0, 0, 0]
+                self.previous_pattern_2 = [1, 0, 0, 1, 1, 1, 0, 0, 0]
                 self.previous_pattern_3 = [0, 1, 0, 0, 1, 0, 0, 1, 1]
                 self.previous_pattern_4 = [1, 0, 0, 1, 0, 0, 1, 1, 1]
                 return True, 0, 0, 0, 0
@@ -267,12 +287,12 @@ class Drone:
                 # Go down
                 c = DOWN_SPD
 
-        if cur_direction == "down" and next_direction == "left":
-            if (g[1] and g[3] and g[4]) or (g[1] and g[4] and g[6] and g[7]) or (g[2] and g[3] and g[4] and g[5]) or (g[2] and g[5] and g[6] and g[7] and g[8]):
-                self.previous_pattern_1 = [0, 1, 0, 1, 1, 0, 0, 0, 0]
-                self.previous_pattern_2 = [0, 0, 1, 1, 1, 1, 0, 0, 0]
-                self.previous_pattern_3 = [0, 1, 0, 0, 1, 0, 1, 1, 0]
-                self.previous_pattern_4 = [0, 0, 1, 0, 1, 0, 1, 1, 1]
+        elif cur_direction == "down" and next_direction == "right": # L →
+            if (g[1] and g[4] and g[5]) or (g[0] and g[3] and g[4] and g[5]) or (g[1] and g[4] and g[7] and g[8]) or (g[0] and g[3] and g[6] and g[7] and g[8]):
+                self.previous_pattern_1 = [0, 1, 0, 0, 1, 1, 0, 0, 0]
+                self.previous_pattern_2 = [1, 0, 0, 1, 1, 1, 0, 0, 0]
+                self.previous_pattern_3 = [0, 1, 0, 0, 1, 0, 0, 1, 1]
+                self.previous_pattern_4 = [1, 0, 0, 1, 0, 0, 1, 1, 1]
                 return True, 0, 0, 0, 0
             elif (g[0] or g[3] or g[6]) and not (self.previous_pattern_1 or self.previous_pattern_2 or self.previous_pattern_3 or self.previous_pattern_4):
                 a = LEFT_SPD
