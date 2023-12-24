@@ -6,6 +6,7 @@ import keyboard_djitellopy
 import random
 from djitellopy import Tello
 from pyimagesearch.pid import PID
+from face_detect import FaceDetector
 
 # YOLOv7
 import torch
@@ -69,6 +70,9 @@ class Drone:
         self.fs = cv2.FileStorage("calibrate-01.xml", cv2.FILE_STORAGE_READ)
         self.intrinsic = self.fs.getNode("intrinsic").mat()
         self.distortion = self.fs.getNode("distortion").mat()
+
+        # Face detector
+        self.face_detector = FaceDetector()
 
         # Aruco marker
         self.dictionary = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
@@ -403,158 +407,15 @@ class Drone:
         return False, 0, 0, 0, 0
 
     def follow_face(self) -> (bool, int, int, int, int):
-        face_cascade = cv2.CascadeClassifier(
-            "haarcascade_frontalface_default.xml")
         frame = self.frame_read.frame
-        faces = face_cascade.detectMultiScale(
-            frame, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40)
-        )
-        frame_width, frame_height = frame.shape[1], frame.shape[0]
-
-        two_face = []
-        for face in faces:
-            x = face[0]
-            y = face[1]
-            w = face[2]
-            h = face[3]
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-            black_line_wid = 1 / 4 * h
-            p1 = (int(x - 1 / 2 * w), int(y - black_line_wid - h / 2))
-            p2 = (int(x + 3 / 2 * w), int(y - h / 2))
-            p3 = (int(x - 1 / 2 * w), int(y + h / 2 + h))
-            p4 = (int(x + 3 / 2 * w), int(y + h / 2 + black_line_wid + h))
-            black_space = [(p1, p2), (p3, p4)]
-            cv2.rectangle(frame, black_space[0][0],
-                          black_space[0][1], (0, 0, 0), 2)
-            cv2.rectangle(frame, black_space[1][0],
-                          black_space[1][1], (0, 0, 0), 2)
-            roi1 = frame[
-                black_space[0][0][0]: black_space[0][1][0],
-                black_space[0][0][1]: black_space[0][1][1],
-            ]
-            roi2 = frame[
-                black_space[1][0][0]: black_space[1][1][0],
-                black_space[1][0][1]: black_space[1][1][1],
-            ]
-            avg_c1 = roi1.mean(axis=(0, 1))
-            avg_c2 = roi2.mean(axis=(0, 1))
-
-            threshold = 120
-            c1_is_black = False
-            if all(avg_c1 < threshold):
-                cv2.putText(
-                    frame,
-                    f"is Black",
-                    black_space[0][0],
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1,
-                    (255, 255, 255),
-                    2,
-                )
-                c1_is_black = True
-            else:
-                cv2.putText(
-                    frame,
-                    f"NOT Black!!!",
-                    black_space[0][0],
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1,
-                    (255, 255, 255),
-                    2,
-                )
-
-            c2_is_black = False
-            if all(avg_c2 < threshold):
-                cv2.putText(
-                    frame,
-                    f"is Black",
-                    black_space[1][0],
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (255, 255, 255),
-                    2,
-                )
-                c2_is_black = True
-            else:
-                cv2.putText(
-                    frame,
-                    f"NOT Black!!!",
-                    black_space[1][0],
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (255, 255, 255),
-                    2,
-                )
-
-            focal_length_mm = 75000
-            if c1_is_black and c2_is_black:
-                face_size_pixels = w * h
-                distance_cm = (focal_length_mm * 15) / face_size_pixels
-                two_face.append((x, y, w, h, distance_cm))
-                cv2.putText(
-                    frame,
-                    "this pic in two face",
-                    (x, y - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (255, 255, 255),
-                    2,
-                )
-
-        if len(two_face) == 2:
-            center_x = (
-                (two_face[0][0] + two_face[0][2] / 2)
-                + (two_face[1][0] + two_face[1][2] / 2)
-            ) / 2
-            center_y = (
-                (two_face[0][1] + two_face[0][3] / 2)
-                + (two_face[1][1] + two_face[1][3] / 2)
-            ) / 2
-            horizontal_offset = center_x - frame_width / 2
-            vertical_offset = -1 * (center_y - frame_height / 2)
-            dist = 30
-            z_offset = dist - (two_face[0][4] + two_face[1][4]) / 2
-
-            if horizontal_offset < 3 and vertical_offset < 3:
-                yaw_offset = (
-                    two_face[0][2] * two_face[0][3] -
-                    two_face[1][2] * two_face[1][3]
-                )
-            else:
-                yaw_offset = 0
-
-            horizontal_update = horizontal_offset * self.SCALING_FACTOR
-            vertical_update = vertical_offset * self.SCALING_FACTOR_Y
-            z_update = z_offset * self.SCALING_FACTOR_Z
-            yaw_update = yaw_offset * self.SCALING_FACTOR
-
-            yaw_update = self.yaw_pid.update(yaw_update, sleep=0)
-            z_update = self._clamping(self.z_pid.update(z_update, sleep=0))
-            horizontal_update = self._clamping(
-                self.h_pid.update(horizontal_update, sleep=0)
-            )
-            vertical_update = self._clamping(
-                self.y_pid.update(vertical_update, sleep=0)
-            )
-
-            print(
-                "[find_face]",
-                "h : ",
-                horizontal_update,
-                "f : ",
-                z_update,
-                "v : ",
-                vertical_update,
-                "r : ",
-                yaw_update,
-            )
-            return (
-                False,
-                int(horizontal_update),
-                int(z_update // 2),
-                int(vertical_update // 2),
-                int(yaw_update),
-            )
+        frame, dist = self.face_detector.detect(frame)
+        if dist is None:
+            return False, 0, 0, 0, 0
+        if dist > self.face_detector.threshold:
+            return False, 0, 0, 0, 5
+        if dist < self.face_detector.threshold:
+            return False, 0, 0, 0, -5
+        return True, 0, 0, 0, 0
 
     def find_marker(self) -> list[int]:
         """
@@ -633,8 +494,11 @@ class Drone:
             elif command == "follow_face":
                 is_success, h, z, v, y = self.follow_face()
                 if is_success:
+                    self.valid_cnt += 1
                     self.send_control(0, 0, 0, 0)
-                    return
+                    if self.valid_cnt == 10:
+                        self.valid_cnt = 0
+                        return
                 self.send_control(h, z, v, y)
             elif command == "follow_line":
                 is_success, h, z, v, y = self.follow_line(
@@ -645,6 +509,8 @@ class Drone:
                     if self.valid_cnt == 4:
                         self.valid_cnt = 0
                         return
+                else:
+                    self.valid_cnt = 0
                 self.send_control(h, z, v, y)
             else:
                 print("[handle_command] Invalid command:", command)
