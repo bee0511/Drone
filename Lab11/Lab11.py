@@ -7,6 +7,7 @@ import random
 from djitellopy import Tello
 from pyimagesearch.pid import PID
 from face_detect import FaceDetector
+from line_follow import LineFollow
 
 # YOLOv7
 import torch
@@ -56,15 +57,13 @@ class Drone:
     SCALING_FACTOR_H = 0.2
     SCALING_FACTOR_Y = 0.4
     SCALING_FACTOR_Z = 0.3
-    BLACK_THRESHOLD = 76800 * 0.22
+    HAND_CONTROL_FB = 20    # Front and back
+    HAND_CONTROL_LR = 20    # Left and right
+    HAND_CONTROL_UD = 35    # Up and down
     init = True
-    valid_cnt = 0
-
-    previous_pattern_1 = [0, 1, 0, 0, 1, 1, 0, 0, 0]
-    previous_pattern_2 = [1, 0, 0, 1, 1, 1, 0, 0, 0]
-    previous_pattern_3 = [0, 1, 0, 0, 1, 0, 0, 1, 1]
-    previous_pattern_4 = [1, 0, 0, 1, 0, 0, 1, 1, 1]
-    previous_pattern_5 = [0, 1, 0, 0, 1, 0, 0, 0, 0]
+    time_cnt = 0
+    wait_key_interval = 10
+    interrupted_flag = False
 
     def __init__(self):
         self.fs = cv2.FileStorage("calibrate-01.xml", cv2.FILE_STORAGE_READ)
@@ -73,6 +72,9 @@ class Drone:
 
         # Face detector
         self.face_detector = FaceDetector()
+
+        # Line follower
+        self.line_follower = LineFollow()
 
         # Aruco marker
         self.dictionary = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
@@ -115,214 +117,61 @@ class Drone:
             return -self.MAX_SPEED_THRESHOLD
         return int(val)
 
-    def _calculate_black_area(self, cell):
-        # Convert BGR to HSV
-        hsv = cv2.cvtColor(cell, cv2.COLOR_BGR2HSV)
-        # Define lower and upper bounds for black color in HSV
-        lower_black = np.array([0, 0, 0])
-        upper_black = np.array([180, 255, 30])
-        # Threshold the HSV image to get only black colors
-        mask = cv2.inRange(hsv, lower_black, upper_black)
-        return np.sum(mask == 255)
-
-    def _detect_line_in_grid(self, frame):
-        height, width, _ = frame.shape
-        cells = [
-            frame[
-                i * height // 3: (i + 1) * height // 3,
-                j * width // 3: (j + 1) * width // 3,
-            ]
-            for i in range(3)
-            for j in range(3)
-        ]
-
-        line_positions = []
-
-        for cell in cells:
-            line_position = self._calculate_black_area(
-                cell
-            )  # Use your line detection method here
-            if line_position > self.BLACK_THRESHOLD:
-                line_positions.append(1)
-            else:
-                line_positions.append(0)
-
-        return line_positions
-
-    def _draw_grid(self, frame, grid):
-        height, width, _ = frame.shape
-
-        # Draw vertical lines to divide the frame into 3 columns
-        cv2.line(frame, (width // 3, 0), (width // 3, height), (255, 0, 0), 2)
-        cv2.line(frame, (2 * width // 3, 0),
-                 (2 * width // 3, height), (255, 0, 0), 2)
-
-        # Draw horizontal lines to divide the frame into 3 rows
-        cv2.line(frame, (0, height // 3), (width, height // 3), (255, 0, 0), 2)
-        cv2.line(frame, (0, 2 * height // 3),
-                 (width, 2 * height // 3), (255, 0, 0), 2)
-
-        # draw the red rectangle on the grid if the grid is 1
-        for i in range(3):
-            for j in range(3):
-                if grid[i * 3 + j] == 1:
-                    cv2.rectangle(frame, (j * width // 3, i * height // 3),
-                                  ((j + 1) * width // 3, (i + 1) * height // 3), (0, 0, 255), 2)
-
-        return frame
-
-    def follow_line(self, cur_direction, next_direction) -> (bool, int, int, int, int):
-        """
-        :param cur_direction: The current direction
-        :param next_direction: The next direction
-        :return: True if the feature is found and followed, False otherwise 
-        """
+    def follow_line(self, cur_direction, next_direction) -> (np.ndarray, bool, int, int, int, int):
         frame = self.frame_read.frame
-        g = self._detect_line_in_grid(self.frame_read.frame)  # grids
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        frame = self.line_follower.drawBoarder(gray_frame)
+        detect_array = self.line_follower.borders  # Left, Right, Top, Bottom
 
-        self._draw_grid(frame, g)
-        # print("[follow_line] next_direction:", next_direction)
-        print("[follow_line] grids:", g)
-        # print("[follow_line] direction:", cur_direction)
+        # put current direction and next direction on the frame
+        cv2.putText(frame, f"cur: {cur_direction}", (100, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.putText(frame, f"next: {next_direction}", (100, 60),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-        # put current direction on the frame
-        cv2.putText(
-            frame,
-            f"cur_direction: {cur_direction}",
-            (0, 30),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1,
-            (255, 255, 255),
-            2,
-        )
-        # put next direction on the frame
-        cv2.putText(
-            frame,
-            f"next_direction: {next_direction}",
-            (0, 60),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1,
-            (255, 255, 255),
-            2,
-        )
+        if not any(detect_array):
+            return frame, False, 0, 0, 0, 0
 
-        cv2.imshow("frame", frame)
-        a = b = c = d = 0
-        UP_SPD = 20
-        DOWN_SPD = -30
-        LEFT_SPD = -15
-        RIGHT_SPD = 15
-        BACK_SPD = -10
+        if self.init == True:  # init, up -> left
+            return frame, False, 0, 0, self.line_follower.UD_SPD, 0
 
-        # count the number of 1 in g
-        count = 0
-        for i in g:
-            if i == 1:
-                count += 1
-        if count == 0:
-            # No black line detected, go back
-            if cur_direction == "left":
-                a = RIGHT_SPD
-            elif cur_direction == "up":
-                c = DOWN_SPD
-            elif cur_direction == "right":
-                a = LEFT_SPD
-            elif cur_direction == "down":
-                c = UP_SPD
-            # b = BACK_SPD
-            return False, a, b, c, d
-        if count > 5:  # Too close, go backward
-            if not self.init:
-                b = BACK_SPD
+        if cur_direction == "right" and next_direction == "down":
+            if detect_array[3]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, self.line_follower.LR_SPD, 0, 0, 0
+        elif cur_direction == "right" and next_direction == "up":
+            if detect_array[2]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, self.line_follower.LR_SPD, 0, 0, 0
+        elif cur_direction == "up" and next_direction == "right":
+            if detect_array[1]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, 0, 0, self.line_follower.UD_SPD, 0
+        elif cur_direction == "up" and next_direction == "left":
+            if detect_array[0]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, 0, 0, self.line_follower.UD_SPD, 0
+        elif cur_direction == "left" and next_direction == "down":
+            if detect_array[3]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, -self.line_follower.LR_SPD, 0, 0, 0
+        elif cur_direction == "left" and next_direction == "up":
+            if detect_array[2]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, -self.line_follower.LR_SPD, 0, 0, 0
+        elif cur_direction == "down" and next_direction == "right":
+            if detect_array[1]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, 0, 0, -self.line_follower.UD_SPD, 0
+        elif cur_direction == "down" and next_direction == "left":
+            if detect_array[0]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, 0, 0, -self.line_follower.UD_SPD, 0
+        else:
+            print("[follow_line] Invalid direction:",
+                  cur_direction, next_direction)
 
-        if cur_direction == "left":
-            a = LEFT_SPD
-        elif cur_direction == "up":
-            c = UP_SPD
-        elif cur_direction == "right":
-            a = RIGHT_SPD
-        elif cur_direction == "down":
-            c = DOWN_SPD
-
-        # previous_flag = (g == self.previous_pattern_1 or g == self.previous_pattern_2 or g ==
-        #                  self.previous_pattern_3 or g == self.previous_pattern_4)
-        previous_flag = True
-        # Check feature
-        if cur_direction == "right" and next_direction == "up":  # 」↑
-            if (g[1] and g[3] and g[4]) or (g[1] and g[4] and g[6] and g[7]):
-                # save all kinds of patterns, for example, g[1] and g[3] and g[4] means the pattern is [0, 1, 0, 1, 1, 0, 0, 0, 0]
-                self.previous_pattern_1 = [0, 1, 0, 1, 1, 0, 0, 0, 0]
-                # self.previous_pattern_2 = [0, 0, 1, 1, 1, 1, 0, 0, 0]
-                self.previous_pattern_3 = [0, 1, 0, 0, 1, 0, 1, 1, 0]
-                # self.previous_pattern_4 = [0, 0, 1, 0, 1, 0, 1, 1, 1]
-                return True, 0, 0, 0, 0
-            elif (g[0] or g[1] or g[2]) and not previous_flag and not self.init:
-                c = UP_SPD
-            elif (g[6] or g[7] or g[8]) and not previous_flag and not self.init:
-                c = DOWN_SPD
-
-        elif cur_direction == "down" and next_direction == "left":  # 」←
-            if (g[1] and g[3] and g[4]) or (g[2] and g[3] and g[4] and g[5]) or (g[1] and g[4] and g[6] and g[7]):
-                self.previous_pattern_1 = [0, 1, 0, 1, 1, 0, 0, 0, 0]
-                self.previous_pattern_2 = [0, 0, 1, 1, 1, 1, 0, 0, 0]
-                self.previous_pattern_3 = [0, 1, 0, 0, 1, 0, 1, 1, 0]
-                self.previous_pattern_4 = [0, 0, 1, 0, 1, 0, 1, 1, 1]
-                return True, 0, 0, 0, 0
-            elif (g[0] or g[3] or g[6]) and not previous_flag:
-                a = LEFT_SPD
-            elif (g[2] or g[5] or g[8]) and not previous_flag:
-                a = RIGHT_SPD
-
-        elif cur_direction == "left" and next_direction == "down":  # 「 ↓
-            if (g[4] and g[5] and g[7]) or (g[1] and g[2] and g[4] and g[7]):
-                self.previous_pattern_1 = [0, 0, 0, 0, 1, 1, 0, 1, 0]
-                self.previous_pattern_2 = [0, 1, 1, 0, 1, 0, 0, 1, 0]
-                # self.previous_pattern_3 = [0, 0, 0, 1, 1, 1, 1, 0, 0]
-                self.previous_pattern_4 = [1, 1, 1, 1, 0, 0, 1, 0, 0]
-                return True, 0, 0, 0, 0
-            elif (g[0] or g[1] or g[2]) and not previous_flag:
-                c = UP_SPD
-            elif (g[6] or g[7] or g[8]) and not previous_flag:
-                c = DOWN_SPD
-
-        elif cur_direction == "up" and next_direction == "right":  # 「 →
-            if (g[4] and g[5] and g[7]) or (g[3] and g[4] and g[5] and g[6]):
-                self.previous_pattern_1 = [0, 0, 0, 0, 1, 1, 0, 1, 0]
-                # self.previous_pattern_2 = [0, 1, 1, 0, 1, 0, 0, 1, 0]
-                self.previous_pattern_3 = [0, 0, 0, 1, 1, 1, 1, 0, 0]
-                self.previous_pattern_4 = [1, 1, 1, 1, 0, 0, 1, 0, 0]
-                return True, 0, 0, 0, 0
-            elif (g[0] or g[3] or g[6]) and not previous_flag:
-                a = LEFT_SPD
-            elif (g[2] or g[5] or g[8]) and not previous_flag:
-                a = RIGHT_SPD
-        elif cur_direction == "up" and next_direction == "left":  # 7 ←
-            if (g[3] and g[4] and g[7]) or (g[3] and g[4] and g[5] and g[8]):
-                self.previous_pattern_1 = [0, 0, 0, 1, 1, 0, 0, 1, 0]
-                # self.previous_pattern_2 = [1, 1, 0, 0, 1, 0, 0, 1, 0]
-                self.previous_pattern_3 = [0, 0, 0, 1, 1, 1, 0, 0, 1]
-                self.previous_pattern_4 = [1, 1, 1, 0, 0, 1, 0, 0, 1]
-                return True, 0, 0, 0, 0
-            elif (g[0] or g[3] or g[6]) and not previous_flag:
-                a = LEFT_SPD
-            elif (g[2] or g[5] or g[8]) and not previous_flag:
-                a = RIGHT_SPD
-
-        elif cur_direction == "left" and next_direction == "up":  # L ↑
-            if (g[1] and g[4] and g[5]) or (g[0] and g[3] and g[4] and g[5]) or (g[1] and g[4] and g[7] and g[8]):
-                self.previous_pattern_1 = [0, 1, 0, 0, 1, 1, 0, 0, 0]
-                self.previous_pattern_2 = [1, 0, 0, 1, 1, 1, 0, 0, 0]
-                self.previous_pattern_3 = [0, 1, 0, 0, 1, 0, 0, 1, 1]
-                self.previous_pattern_4 = [1, 0, 0, 1, 0, 0, 1, 1, 1]
-                return True, 0, 0, 0, 0
-            elif (g[0] or g[1] or g[2]) and not previous_flag:
-                c = UP_SPD
-            elif (g[6] or g[7] or g[8]) and not previous_flag:
-                c = DOWN_SPD
-
-        return False, a, b, c, d
-
-    def follow_marker(self, marker_id, distance) -> (bool, int, int, int, int):
+    def follow_marker(self, marker_id, distance) -> (np.ndarray, bool, int, int, int, int):
         """
         :param marker_id: The id of the marker to follow
         :param distance: The distance to keep from the marker
@@ -336,10 +185,9 @@ class Drone:
             markerCorners, 15, self.intrinsic, self.distortion
         )
         frame = cv2.aruco.drawDetectedMarkers(frame, markerCorners, markerIds)
-        cv2.imshow("frame", frame)
 
         if np.array(rvec).ndim == 0:
-            return False, 0, 0, 0, 0
+            return frame, False, 0, 0, 0, 0
 
         frame_width, frame_height = frame.shape[1], frame.shape[0]
 
@@ -369,6 +217,7 @@ class Drone:
                     and yaw_angle > -15
                 ):
                     return (
+                        frame,
                         True,
                         int(horizontal_update),
                         int(z_update // 2),
@@ -378,24 +227,15 @@ class Drone:
 
                 z_update = self._clamping(self.z_pid.update(z_update, sleep=0))
                 horizontal_update = self._clamping(
-                    self.h_pid.update(horizontal_update, sleep=0)
-                )
+                    self.h_pid.update(horizontal_update, sleep=0))
                 vertical_update = self._clamping(
-                    self.y_pid.update(vertical_update, sleep=0)
-                )
+                    self.y_pid.update(vertical_update, sleep=0))
 
-                print(
-                    "[follow_marker] Target marker detected",
-                    "h : ",
-                    horizontal_update,
-                    "f : ",
-                    z_update,
-                    "v : ",
-                    vertical_update,
-                    "r : ",
-                    yaw_control,
-                )
+                text = f"[follow_marker] Target marker detected h : {horizontal_update} f : {z_update} v : {vertical_update} r : {yaw_control}"
+                cv2.putText(frame, text, (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
                 return (
+                    frame,
                     False,
                     int(horizontal_update),
                     int(z_update // 2),
@@ -404,18 +244,20 @@ class Drone:
                 )
 
         print("[follow_marker] No marker detected, stay still!")
-        return False, 0, 0, 0, 0
+        return frame, False, 0, 0, 0, 0
 
     def follow_face(self) -> (bool, int, int, int, int):
         frame = self.frame_read.frame
         frame, dist = self.face_detector.detect(frame)
         if dist is None:
-            return False, 0, 0, 0, 0
+            cv2.putText(frame, "No face detected", (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            return frame, False, 0, 0, 0, 0
         if dist > self.face_detector.threshold:
-            return False, 0, 0, 0, 5
+            return frame, False, 0, 0, 0, 5
         if dist < self.face_detector.threshold:
-            return False, 0, 0, 0, -5
-        return True, 0, 0, 0, 0
+            return frame, False, 0, 0, 0, -5
+        return frame, True, 0, 0, 0, 0
 
     def find_marker(self) -> list[int]:
         """
@@ -426,8 +268,7 @@ class Drone:
             frame, self.dictionary, parameters=self.parameters
         )
         frame = cv2.aruco.drawDetectedMarkers(frame, markerCorners, markerIds)
-        # cv2.imshow("frame", frame)
-        return markerIds
+        return frame, markerIds
 
     def command_loop(
         self,
@@ -436,19 +277,28 @@ class Drone:
         direction=0,
         distance=0,
         next_direction=0,
+        valid_count=1,
+        height=0,
     ):
         """
         This part control the drone and handle the keyboard input at the same time
         """
-        # print(command, marker_id, direction, distance, next_direction)
+        tmp_valid_count = valid_count
         while True:
             frame = self.frame_read.frame
-            key = cv2.waitKey(10)
-            cv2.imshow("frame", frame)
+            key = cv2.waitKey(self.wait_key_interval)
+            if self.init == True:
+                self.time_cnt += self.wait_key_interval
+                if self.time_cnt > 2000:
+                    self.init = False
+                    self.time_cnt = 0
 
             # DONT WRITE LOOPS INSIDE THIS CONDITION CHAIN
             if key != -1:
                 print(key)
+                self.interrupted_flag = True
+                if key == ord("p"):
+                    self.interrupted_flag = not self.interrupted_flag
                 keyboard_djitellopy.keyboard(self.drone, key)
             elif command == "take_off":
                 self.drone.takeoff()
@@ -456,65 +306,142 @@ class Drone:
             elif command == "land":
                 self.drone.land()
                 return
-            elif command == "up":
-                self.drone.move_up(distance)
+            elif command == "turn_right":
+                self.drone.rotate_clockwise(90)
                 return
-            elif command == "down":
-                self.drone.move_down(distance)
-                return
-            elif command == "left":
-                self.drone.move_left(distance)
-                return
-            elif command == "right":
-                self.drone.move_right(distance)
-                return
-            elif command == "forward":
-                self.drone.move_forward(distance)
-                return
-            elif command == "backward":
-                self.drone.move_backward(distance)
+            elif command == "turn_back":
+                self.drone.rotate_clockwise(180)
                 return
             elif command == "stop":
                 self.send_control(0, 0, 0, 0)
                 return
+            elif command == "forward":
+                valid_count -= 1
+                cv2.putText(frame, f"valid_count: {valid_count}", (10, 150),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                if valid_count == 0:
+                    self.send_control(0, 0, 0, 0)
+                    return
+                self.send_control(0, self.HAND_CONTROL_FB, 0, 0)
             elif command == "up_until_marker":
                 # self.send_control(0, 0, 10, 0)
-                marker_ids = self.find_marker()
+                frame, marker_ids = self.find_marker()
                 if marker_ids:
                     self.send_control(0, 0, 0, 0)
                     return
+            elif command == "direct_move_left":
+                if self.interrupted_flag:
+                    self.send_control(0, 0, 0, 0)
+                    valid_count = -1
+                else:
+                    valid_count -= 1
+                    cv2.putText(frame, f"valid_count: {valid_count}", (10, 150),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    if valid_count < 0:
+                        self.send_control(0, 0, 0, 0)
+                        return
+                    self.send_control(-self.HAND_CONTROL_LR, 0, 0, 0)
+            elif command == "direct_move_right":
+                if self.interrupted_flag:
+                    self.send_control(0, 0, 0, 0)
+                    valid_count = -1
+                else:
+                    valid_count -= 1
+                    cv2.putText(frame, f"valid_count: {valid_count}", (10, 150),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    if valid_count < 0:
+                        self.send_control(0, 0, 0, 0)
+                        return
+                    self.send_control(self.HAND_CONTROL_LR, 0, 0, 0)
+            elif command == "direct_move_up":
+                if self.interrupted_flag:
+                    self.send_control(0, 0, 0, 0)
+                else:
+                    my_height = self.drone.get_height()
+                    cv2.putText(frame, f"my_height: {my_height}", (10, 150),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    if my_height > height:
+                        self.send_control(0, 0, 0, 0)
+                        return
+                    self.send_control(0, 0, self.HAND_CONTROL_UD, 0)
+            elif command == "direct_move_down":
+                if self.interrupted_flag:
+                    self.send_control(0, 0, 0, 0)
+                else:
+                    my_height = self.drone.get_height()
+                    cv2.putText(frame, f"my_height: {my_height}", (10, 150),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    if my_height < height:
+                        self.send_control(0, 0, 0, 0)
+                        return
+                    self.send_control(0, 0, -self.HAND_CONTROL_UD, 0)
             elif command == "follow_marker":
-                is_success, h, z, v, y = self.follow_marker(
+                frame, is_success, x, z, y, yaw = self.follow_marker(
                     marker_id, distance)
+                # Put x, z, y, yaw on the frame
+                cv2.putText(frame, f"x: {x}", (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, f"z: {z}", (10, 60),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, f"y: {y}", (10, 90),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, f"yaw: {yaw}", (10, 120),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 if is_success:
                     print("Success follow marker!!!!!")
                     self.send_control(0, 0, 0, 0)
                     return
-                self.send_control(h, z, v, y)
+                self.send_control(x, z, y, yaw)
             elif command == "follow_face":
-                is_success, h, z, v, y = self.follow_face()
+                frame, is_success, x, z, y, yaw = self.follow_face()
+
+                # Put x, z, y, yaw on the frame
                 if is_success:
-                    self.valid_cnt += 1
+                    valid_count -= 1
                     self.send_control(0, 0, 0, 0)
-                    if self.valid_cnt == 10:
-                        self.valid_cnt = 0
-                        return
-                self.send_control(h, z, v, y)
-            elif command == "follow_line":
-                is_success, h, z, v, y = self.follow_line(
-                    direction, next_direction)
-                if is_success:
-                    self.valid_cnt += 1
-                    self.send_control(0, 0, 0, 0)
-                    if self.valid_cnt == 4:
-                        self.valid_cnt = 0
+                    cv2.putText(frame, f"valid_count: {valid_count}", (10, 150),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    if valid_count == 0:
                         return
                 else:
-                    self.valid_cnt = 0
-                self.send_control(h, z, v, y)
+                    valid_count = tmp_valid_count
+                cv2.putText(frame, f"x: {x}", (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, f"z: {z}", (10, 60),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, f"y: {y}", (10, 90),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, f"yaw: {yaw}", (10, 120),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                self.send_control(x, z, y, yaw)
+            elif command == "follow_line":
+                frame, is_success, x, z, y, yaw = self.follow_line(
+                    direction, next_direction)
+
+                if is_success:
+                    valid_count -= 1
+                    self.send_control(0, 0, 0, 0)
+                    cv2.putText(frame, f"valid_count: {valid_count}", (10, 150),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    if valid_count == 0:
+                        return
+                else:
+                    valid_count = tmp_valid_count
+                # Put x, z, y, yaw on the frame
+                cv2.putText(frame, f"x: {x}", (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, f"z: {z}", (10, 60),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, f"y: {y}", (10, 90),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                cv2.putText(frame, f"yaw: {yaw}", (10, 120),
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+                self.send_control(x, z, y, yaw)
             else:
                 print("[handle_command] Invalid command:", command)
-            # cv2.imshow("work", frame)
+
+            cv2.imshow("frame", frame)
 
 
 def main():
@@ -522,27 +449,227 @@ def main():
 
     # 0:left, 1:up, 2:right, 3:down
     # line ['line', [0123], [line_position]] 離牆30
-    actions_melody = []
+    actions_test = [
+        {"command": "take_off"},
+        {"command": "up_until_marker"},
+        {"command": "follow_marker", "marker_id": 0, "distance": 50},
+        
+        {"command": "stop"},
+        {"command": "land"},
+    ]
+    
+    actions_force_melody = [
+        {"command": "take_off"},
+        {"command": "up_until_marker"},
+        {"command": "follow_marker", "marker_id": 1, "distance": 36},
+        {
+            "command": "direct_move_up",
+            "height": 170,
+        },
+        {
+            "command": "direct_move_left",
+            "valid_count": 300,
+        },
+        {
+            "command": "direct_move_down",
+            "height": 30,
+        },
+        {
+            "command": "direct_move_left",
+            "valid_count": 400,
+        },
+        {
+            "command": "direct_move_up",
+            "height": 75,
+        },
+        {"command": "follow_marker", "marker_id": 2, "distance": 50},
+        {"command": "turn_right"},
+        {"command": "follow_face", "valid_count": 5},
+        {"command": "forward", "valid_count": 300},
+        {"command": "turn_back"},
+        {"command": "follow_marker", "marker_id": 3, "distance": 150},
+        {"command": "land"},
+    ]
+    
+    actions_force_carna = [
+        {"command": "take_off"},
+        {"command": "up_until_marker"},
+        {"command": "follow_marker", "marker_id": 1, "distance": 36},
+        {
+            "command": "direct_move_down",
+            "height": 30,
+        },
+        {
+            "command": "direct_move_left",
+            "valid_count": 400,
+        },
+        {
+            "command": "direct_move_up",
+            "height": 170,
+        },
+        {
+            "command": "direct_move_left",
+            "valid_count": 300,
+        },
+        {
+            "command": "direct_move_down",
+            "height": 75,
+        },
+        {"command": "follow_marker", "marker_id": 2, "distance": 50},
+        {"command": "turn_right"},
+        {"command": "follow_face", "valid_count": 5},
+        {"command": "forward", "valid_count": 300},
+        {"command": "turn_back"},
+        {"command": "follow_marker", "marker_id": 3, "distance": 150},
+        {"command": "land"},
+    ]
+    
+    actions_melody = [
+        {"command": "take_off"},
+        {"command": "up_until_marker"},
+        {"command": "follow_marker", "marker_id": 1, "distance": 36},
+        {
+            "command": "follow_line",
+            "direction": "up",
+            "next_direction": "left",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "up",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "up",
+            "next_direction": "left",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "down",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "down",
+            "next_direction": "left",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "down",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "down",
+            "next_direction": "left",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "up",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "up",
+            "next_direction": "left",
+            "valid_count": 5,
+        },
+        {"command": "follow_marker", "marker_id": 2, "distance": 50},
+        {"command": "turn_right"},
+        {"command": "follow_face", "valid_count": 5},
+        {"command": "forward", "valid_count": 300},
+        {"command": "turn_back"},
+        {"command": "follow_marker", "marker_id": 3, "distance": 150},
+        {"command": "land"},
+    ]
 
-    actions_carna = []
+    actions_carna = [
+        {"command": "take_off"},
+        {"command": "up_until_marker"},
+        {"command": "follow_marker", "marker_id": 1, "distance": 36},
+        {
+            "command": "follow_line",
+            "direction": "up",
+            "next_direction": "left",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "down",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "down",
+            "next_direction": "left",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "up",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "up",
+            "next_direction": "left",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "up",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "up",
+            "next_direction": "left",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "down",
+            "valid_count": 5,
+        },
+        {
+            "command": "follow_line",
+            "direction": "down",
+            "next_direction": "left",
+            "valid_count": 5,
+        },
+        {"command": "follow_marker", "marker_id": 2, "distance": 50},
+        {"command": "turn_right"},
+        {"command": "follow_face", "valid_count": 5},
+        {"command": "forward", "valid_count": 300},
+        {"command": "turn_back"},
+        {"command": "follow_marker", "marker_id": 3, "distance": 150},
+        {"command": "land"},
+    ]
 
-    actions_lab10 = [
+    actions_lab11 = [
         {"command": "take_off"},
         {"command": "up_until_marker"},
         {"command": "follow_marker", "marker_id": 3, "distance": 36},
         {
             "command": "follow_line",
-            "direction": "right",
-            "next_direction": "up",
-        },
-        {
-            "command": "follow_line",
             "direction": "up",
-            "next_direction": "right",
+            "next_direction": "left",
         },
         {
             "command": "follow_line",
-            "direction": "right",
+            "direction": "left",
             "next_direction": "up",
         },
         {
@@ -558,13 +685,17 @@ def main():
         {
             "command": "follow_line",
             "direction": "down",
-            "next_direction": "right",
+            "next_direction": "left",
         },
-        {"command": "follow_marker", "marker_id": 3, "distance": 50},
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "down",
+        },
         {"command": "land"},
     ]
 
-    active_actions = actions_lab10
+    active_actions = actions_lab11
 
     # YOLOv7 detech object to decide which action to take
     # WEIGHT = './best.pt'
