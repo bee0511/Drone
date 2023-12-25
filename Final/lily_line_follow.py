@@ -14,6 +14,8 @@ class LineFollow:
         self.LR_SPD = 15  # left right speed
         self.FB_SPD = 10  # forward backward speed
         self.UD_SPD = 25  # up down speed
+        self.BLACK_CONST = 0.1
+        self.BLACK_LINE_CONST = 0.05
 
     def calculate_black_area(self, cell):
         # Convert BGR to HSV
@@ -53,9 +55,9 @@ class LineFollow:
 
         line_position = [] # top, bottom, left, right
         for i in range(4):
-            if self._calculate_black_area(sides[i]) > line_threshold[i]:
+            if self.calculate_black_area(sides[i]) > line_threshold[i]:
                 line_position.append(2)
-            elif self._calculate_black_area(sides[i]) > threshold[i]:
+            elif self.calculate_black_area(sides[i]) > threshold[i]:
                 line_position.append(1)
             else :
                 line_position.append(0)
@@ -97,10 +99,9 @@ if __name__ == "__main__":
         img_path = "./saved_images/saved_" + str(i) + ".png"
         frame = cv2.imread(img_path)
         # Convert the image to grayscale
-        gray_img = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        s = detector.detect_line(frame)  # sides = [top, bottom, left, right]
+        drawn_frame = detector.draw_sides(frame, s)
 
-        frame = detector.drawBoarder(gray_img)
-        print(detector.borders)
         # frame, is_Success, a, b, c, d = detector.detectLine(frame, "right", "up")
         cv2.imshow("frame", frame)
         cv2.waitKey(0)
