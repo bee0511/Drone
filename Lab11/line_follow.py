@@ -9,16 +9,16 @@ class LineFollow:
     def __init__(self):
         self.init = True
         self.border_thickness = 20
+        self.border_length = 150
         self.otsu = OtsuThreshold()
         self.borders = [False, False, False, False]  # Left, Right, Top, Bottom
         self.LR_SPD = 15  # left right speed
         self.FB_SPD = 10  # forward backward speed
         self.UD_SPD = 25  # up down speed
+        self.black_threshold = self.border_length * self.border_thickness * 0.5
 
     def drawBoarder(self, frame):
         height, width = frame.shape
-        black_threshold = 1000
-        border_length = 150
 
         # Convert the frame to black and white
         bw_frame = self.otsu.process_frame(frame)
@@ -27,14 +27,14 @@ class LineFollow:
 
         # Define the borders
         borders = [
-            ((0, height // 2 - border_length),
-             (self.border_thickness, height // 2 + border_length)),  # Left
-            ((width - self.border_thickness, height // 2 - border_length),
-             (width, height // 2 + border_length)),  # Right
-            ((width // 2 - border_length, 0), (width // 2 + \
-             border_length, self.border_thickness)),  # Top
-            ((width // 2 - border_length, height - self.border_thickness),
-             (width // 2 + border_length, height))  # Bottom
+            ((0, height // 2 - self.border_length),
+             (self.border_thickness, height // 2 + self.border_length)),  # Left
+            ((width - self.border_thickness, height // 2 - self.border_length),
+             (width, height // 2 + self.border_length)),  # Right
+            ((width // 2 - self.border_length, 0), (width // 2 + \
+             self.border_length, self.border_thickness)),  # Top
+            ((width // 2 - self.border_length, height - self.border_thickness),
+             (width // 2 + self.border_length, height))  # Bottom
         ]
 
         positions = ['Left', 'Right', 'Top', 'Bottom']
@@ -44,7 +44,7 @@ class LineFollow:
             # Calculate the black area in the border
             black_area = np.sum(bw_frame[y1:y2, x1:x2] == 0)
 
-            if black_area > black_threshold:
+            if black_area > self.black_threshold:
                 # If the black area exceeds the threshold, change the border color to red and set the status to True
                 color = (0, 255, 0)
                 self.borders[i] = True
