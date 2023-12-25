@@ -453,11 +453,46 @@ def main():
         {"command": "take_off"},
         {"command": "up_until_marker"},
         {"command": "follow_marker", "marker_id": 0, "distance": 50},
-        
+        {"command": "direct_move_left", "valid_count": 50},
         {"command": "stop"},
         {"command": "land"},
     ]
-
+    actions_lab10 = [
+        {"command": "take_off"},
+        {"command": "up_until_marker"},
+        {"command": "follow_marker", "marker_id": 3, "distance": 36},
+        {
+            "command": "follow_line",
+            "direction": "right",
+            "next_direction": "up",
+        },
+        {
+            "command": "follow_line",
+            "direction": "up",
+            "next_direction": "right",
+        },
+        {
+            "command": "follow_line",
+            "direction": "right",
+            "next_direction": "up",
+        },
+        {
+            "command": "follow_line",
+            "direction": "up",
+            "next_direction": "left",
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "down",
+        },
+        {
+            "command": "follow_line",
+            "direction": "down",
+            "next_direction": "right",
+        },
+        {"command": "land"},
+    ]
     actions_lab11 = [
         {"command": "take_off"},
         {"command": "up_until_marker"},
@@ -495,7 +530,7 @@ def main():
         {"command": "land"},
     ]
 
-    active_actions = actions_lab11
+    active_actions = actions_test
 
     # YOLOv7 detech object to decide which action to take
     # WEIGHT = './best.pt'
