@@ -117,77 +117,16 @@ class Drone:
             return -self.MAX_SPEED_THRESHOLD
         return int(val)
 
-    def follow_line(self, cur_direction, next_direction) -> (np.ndarray, bool, int, int, int, int):
+    def find_marker(self) -> list[int]:
+        """
+        :return: A list of marker ids found in the frame
+        """
         frame = self.frame_read.frame
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        frame = self.line_follower.drawBoarder(gray_frame)
-        detect_array = self.line_follower.borders  # Left, Right, Top, Bottom
-
-        # put current direction and next direction on the frame
-        cv2.putText(frame, f"cur: {cur_direction}", (100, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-        cv2.putText(frame, f"next: {next_direction}", (100, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-        # if not any(detect_array):
-        #     return frame, False, 0, 0, 0, 0
-
-        if self.init == True:
-            if cur_direction == "right":
-                return frame, False, self.line_follower.LR_SPD, -self.line_follower.FB_SPD, 0, 0
-            if cur_direction == "left":
-                return frame, False, -self.line_follower.LR_SPD, -self.line_follower.FB_SPD, 0, 0
-            if cur_direction == "up":
-                return frame, False, 0, -self.line_follower.FB_SPD, self.line_follower.UD_SPD, 0
-            if cur_direction == "down":
-                return frame, False, 0, -self.line_follower.FB_SPD, -self.line_follower.UD_SPD, 0
-            if cur_direction == "left_table":
-                return frame, False, -self.line_follower.LR_SPD, 0, 0, 0
-
-        if cur_direction == "right" and next_direction == "down":
-            if detect_array[3]:
-                return frame, True, 0, 0, 0, 0
-            return frame, False, self.line_follower.LR_SPD, 0, 0, 0
-        elif cur_direction == "right" and next_direction == "up":
-            if detect_array[2]:
-                return frame, True, 0, 0, 0, 0
-            return frame, False, self.line_follower.LR_SPD, 0, 0, 0
-        elif cur_direction == "up" and next_direction == "right":
-            if detect_array[1]:
-                return frame, True, 0, 0, 0, 0
-            return frame, False, 0, 0, self.line_follower.UD_SPD, 0
-        elif cur_direction == "up" and next_direction == "left":
-            if detect_array[0]:
-                return frame, True, 0, 0, 0, 0
-            return frame, False, 0, 0, self.line_follower.UD_SPD, 0
-        elif cur_direction == "left" and next_direction == "down":
-            if detect_array[3]:
-                return frame, True, 0, 0, 0, 0
-            return frame, False, -self.line_follower.LR_SPD, 0, 0, 0
-        elif cur_direction == "left" and next_direction == "up":
-            if detect_array[2]:
-                return frame, True, 0, 0, 0, 0
-            return frame, False, -self.line_follower.LR_SPD, 0, 0, 0
-        elif cur_direction == "down" and next_direction == "right":
-            if detect_array[1]:
-                return frame, True, 0, 0, 0, 0
-            return frame, False, 0, 0, -self.line_follower.UD_SPD, 0
-        elif cur_direction == "down" and next_direction == "left":
-            if detect_array[0]:
-                return frame, True, 0, 0, 0, 0
-            return frame, False, 0, 0, -self.line_follower.UD_SPD, 0
-        elif cur_direction == "left" and next_direction == "aruco":
-            frame, markerIds = self.find_marker()
-            if markerIds is not None:
-                return frame, True, 0, 0, 0, 0
-            return frame, False, -self.line_follower.LR_SPD, -10, 0, 0
-        elif cur_direction == "left_table" and next_direction == "up_table":
-            if detect_array[2]:
-                return frame, True, 0, 0, 0, 0
-            return frame, False, -self.line_follower.LR_SPD, 0, 0, 0
-        else:
-            print("[follow_line] Invalid direction:",
-                  cur_direction, next_direction)
+        markerCorners, markerIds, _ = cv2.aruco.detectMarkers(
+            frame, self.dictionary, parameters=self.parameters
+        )
+        frame = cv2.aruco.drawDetectedMarkers(frame, markerCorners, markerIds)
+        return frame, markerIds
 
     def follow_marker(self, marker_id, distance) -> (bool, int, int, int, int):
         """
@@ -264,13 +203,85 @@ class Drone:
                 return (
                     False,
                     int(horizontal_update),
-                    int(z_update // 2),
+                    int(z_update),
                     int(vertical_update // 2),
                     int(yaw_control),
                 )
 
         print("[follow_marker] No marker detected, stay still!")
         return False, 0, 0, 0, 0
+
+    def follow_line(self, cur_direction, next_direction) -> (np.ndarray, bool, int, int, int, int):
+        frame = self.frame_read.frame
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        frame = self.line_follower.drawBoarder(gray_frame)
+        detect_array = self.line_follower.borders  # Left, Right, Top, Bottom
+
+        # put current direction and next direction on the frame
+        cv2.putText(frame, f"cur: {cur_direction}", (100, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.putText(frame, f"next: {next_direction}", (100, 60),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+        # if not any(detect_array):
+        #     return frame, False, 0, 0, 0, 0
+
+        if self.init == True:
+            if cur_direction == "right":
+                return frame, False, self.line_follower.LR_SPD, -self.line_follower.FB_SPD, 0, 0
+            if cur_direction == "left":
+                return frame, False, -self.line_follower.LR_SPD, -self.line_follower.FB_SPD, 0, 0
+            if cur_direction == "up":
+                return frame, False, 0, -self.line_follower.FB_SPD, self.line_follower.UD_SPD, 0
+            if cur_direction == "down":
+                return frame, False, 0, -self.line_follower.FB_SPD, -self.line_follower.UD_SPD, 0
+            if cur_direction == "left_table":
+                return frame, False, -self.line_follower.LR_SPD, 0, 0, 0
+
+        if cur_direction == "right" and next_direction == "down":
+            if detect_array[3]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, self.line_follower.LR_SPD, 0, 0, 0
+        elif cur_direction == "right" and next_direction == "up":
+            if detect_array[2]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, self.line_follower.LR_SPD, 0, 0, 0
+        elif cur_direction == "up" and next_direction == "right":
+            if detect_array[1]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, 0, 0, self.line_follower.UD_SPD, 0
+        elif cur_direction == "up" and next_direction == "left":
+            if detect_array[0]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, 0, 0, self.line_follower.UD_SPD, 0
+        elif cur_direction == "left" and next_direction == "down":
+            if detect_array[3]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, -self.line_follower.LR_SPD, 0, 0, 0
+        elif cur_direction == "left" and next_direction == "up":
+            if detect_array[2]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, -self.line_follower.LR_SPD, 0, 0, 0
+        elif cur_direction == "down" and next_direction == "right":
+            if detect_array[1]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, 0, 0, -self.line_follower.UD_SPD, 0
+        elif cur_direction == "down" and next_direction == "left":
+            if detect_array[0]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, 0, 0, -self.line_follower.UD_SPD, 0
+        elif cur_direction == "left" and next_direction == "aruco":
+            frame, markerIds = self.find_marker()
+            if markerIds is not None:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, -self.line_follower.LR_SPD, -10, 0, 0
+        elif cur_direction == "left_table" and next_direction == "up_table":
+            if detect_array[2]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, -self.line_follower.LR_SPD, 0, 0, 0
+        else:
+            print("[follow_line] Invalid direction:",
+                  cur_direction, next_direction)
 
     def follow_face(self) -> (bool, int, int, int, int):
         frame = self.frame_read.frame
@@ -285,17 +296,6 @@ class Drone:
             return frame, False, 7, 0, 0, 0
         return frame, True, 0, 0, 0, 0
 
-    def find_marker(self) -> list[int]:
-        """
-        :return: A list of marker ids found in the frame
-        """
-        frame = self.frame_read.frame
-        markerCorners, markerIds, _ = cv2.aruco.detectMarkers(
-            frame, self.dictionary, parameters=self.parameters
-        )
-        frame = cv2.aruco.drawDetectedMarkers(frame, markerCorners, markerIds)
-        return frame, markerIds
-
     def command_loop(
         self,
         command="stop",
@@ -305,6 +305,7 @@ class Drone:
         next_direction=0,
         valid_count=1,
         height=0,
+        time_threshold=100,
     ):
         """
         This part control the drone and handle the keyboard input at the same time
@@ -318,19 +319,9 @@ class Drone:
             key = cv2.waitKey(self.wait_key_interval)
 
             # DONT WRITE LOOPS INSIDE THIS CONDITION CHAIN
-            if key != -1:
+            if key != -1 and key != ord("p"):
                 print(key)
-                # if key != ord("z") and key != ord("m") and key != ord("n") and key != ord("p") and key != ord("w"):
-                #     self.interrupted_flag = True
-                # if key == ord("p"):
-                #     self.interrupted_flag = False
-                # else:
                 keyboard_djitellopy.keyboard(self.drone, key)
-            # if self.interrupted_flag == True:
-            #     self.send_control(0, 0, 0, 0)
-            #     cv2.putText(frame, "Interrupted", (10, 150),
-            #                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            #     continue
             elif command == "take_off":
                 self.drone.takeoff()
                 return
@@ -361,49 +352,16 @@ class Drone:
                 if marker_ids is not None:
                     self.send_control(0, 0, 0, 0)
                     return
-            elif command == "direct_move_left":
-                valid_count -= 1
-                cv2.putText(frame, f"valid_count: {valid_count}", (10, 150),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                if valid_count < 0:
-                    self.send_control(0, 0, 0, 0)
-                    return
-                self.send_control(-self.HAND_CONTROL_LR, 0, 0, 0)
-            elif command == "direct_move_right":
-                valid_count -= 1
-                cv2.putText(frame, f"valid_count: {valid_count}", (10, 150),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                if valid_count < 0:
-                    self.send_control(0, 0, 0, 0)
-                    return
-                self.send_control(self.HAND_CONTROL_LR, 0, 0, 0)
-            elif command == "direct_move_up":
-                my_height = self.drone.get_height()
-                cv2.putText(frame, f"my_height: {my_height}", (10, 150),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                if my_height > height:
-                    self.send_control(0, 0, 0, 0)
-                    return
-                self.send_control(0, 0, self.HAND_CONTROL_UD, 0)
-            elif command == "direct_move_down":
-                my_height = self.drone.get_height()
-                cv2.putText(frame, f"my_height: {my_height}", (10, 150),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                if my_height < height:
-                    self.send_control(0, 0, 0, 0)
-                    return
-                self.send_control(0, 0, -self.HAND_CONTROL_UD, 0)
             elif command == "follow_marker":
                 is_success, x, z, y, yaw = self.follow_marker(
                     marker_id, distance)
-                if is_success:
+                if is_success or key == ord("p"):
                     print("Success follow marker!!!!!")
                     self.send_control(0, 0, 0, 0)
                     return
                 self.send_control(x, z, y, yaw)
             elif command == "follow_face":
                 frame, is_success, x, z, y, yaw = self.follow_face()
-
                 # Put x, z, y, yaw on the frame
                 if is_success:
                     valid_count -= 1
@@ -414,7 +372,6 @@ class Drone:
                         return
                 else:
                     valid_count = tmp_valid_count
-                    print("Not success follow face!!!!! Reset valid_count")
                 cv2.putText(frame, f"x: {x}", (10, 30),
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 cv2.putText(frame, f"z: {z}", (10, 60),
@@ -427,26 +384,9 @@ class Drone:
             elif command == "follow_line":
                 if self.init == True:
                     self.time_cnt += self.wait_key_interval
-                    if direction == "left" and next_direction == "up":
-                        if self.time_cnt > 100:
-                            self.init = False
-                            self.time_cnt = 0
-                    elif direction == "left" and next_direction == "down":
-                        if self.time_cnt > 100:
-                            self.init = False
-                            self.time_cnt = 0
-                    elif direction == "up" and next_direction == "left":
-                        if self.time_cnt > 500:
-                            self.init = False
-                            self.time_cnt = 0
-                    elif direction == "left_table" and next_direction == "up_table":
-                        if self.time_cnt > 4000:
-                            self.init = False
-                            self.time_cnt = 0
-                    else:
-                        if self.time_cnt > 300:
-                            self.init = False
-                            self.time_cnt = 0
+                    if self.time_cnt > time_threshold:
+                        self.init = False
+                        self.time_cnt = 0
                 frame, is_success, x, z, y, yaw = self.follow_line(
                     direction, next_direction)
                 cv2.putText(frame, f"timer: {self.time_cnt}", (150, 500),
@@ -481,8 +421,6 @@ class Drone:
 def main():
     drone = Drone()
 
-    # 0:left, 1:up, 2:right, 3:down
-    # line ['line', [0123], [line_position]] 離牆30
     actions_test = [
         {"command": "up_until_marker", "marker_id": 2},
         {"command": "follow_marker", "marker_id": 2, "distance": 305},
@@ -503,60 +441,70 @@ def main():
             "direction": "up",
             "next_direction": "left",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "left",
             "next_direction": "up",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "up",
             "next_direction": "left",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "left",
             "next_direction": "down",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "down",
             "next_direction": "left",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "left",
             "next_direction": "down",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "down",
             "next_direction": "left",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "left_table",
             "next_direction": "up_table",
             "valid_count": 1,
+            "time_threshold": 4000,
         },
         {
             "command": "follow_line",
             "direction": "up",
             "next_direction": "left",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "left",
             "next_direction": "aruco",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {"command": "follow_marker", "marker_id": 2, "distance": 305},
         {"command": "turn_right"},
@@ -576,60 +524,70 @@ def main():
             "direction": "up",
             "next_direction": "left",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "left",
             "next_direction": "down",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "down",
             "next_direction": "left",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "left_table",
             "next_direction": "up_table",
             "valid_count": 1,
+            "time_threshold": 4000,
         },
         {
             "command": "follow_line",
             "direction": "up",
             "next_direction": "left",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "left",
             "next_direction": "up",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "up",
             "next_direction": "left",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "left",
             "next_direction": "down",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "down",
             "next_direction": "left",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {
             "command": "follow_line",
             "direction": "left",
             "next_direction": "aruco",
             "valid_count": 1,
+            "time_threshold": 100,
         },
         {"command": "follow_marker", "marker_id": 2, "distance": 305},
         {"command": "turn_right"},
@@ -640,149 +598,6 @@ def main():
         {"command": "land"},
     ]
 
-    actions_test_melody = [
-        {"command": "take_off"},
-        {"command": "up_until_marker"},
-        {"command": "follow_marker", "marker_id": 1, "distance": 36},
-        {
-            "command": "follow_line",
-            "direction": "up",
-            "next_direction": "left",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "left",
-            "next_direction": "up",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "up",
-            "next_direction": "left",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "left",
-            "next_direction": "down",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "down",
-            "next_direction": "left",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "left",
-            "next_direction": "down",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "down",
-            "next_direction": "left",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "left",
-            "next_direction": "up",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "up",
-            "next_direction": "left",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "left",
-            "next_direction": "aruco",
-            "valid_count": 1,
-        },
-        {"command": "follow_marker", "marker_id": 2, "distance": 50},
-        {"command": "turn_right"},
-        {"command": "follow_face", "valid_count": 5},
-        {"command": "forward", "valid_count": 300},
-        {"command": "turn_back"},
-        {"command": "follow_marker", "marker_id": 3, "distance": 150},
-        {"command": "land"},
-    ]
-
-    actions_test_carna = [
-        {"command": "take_off"},
-        {"command": "up_until_marker"},
-        {"command": "follow_marker", "marker_id": 1, "distance": 36},
-        {
-            "command": "follow_line",
-            "direction": "up",
-            "next_direction": "left",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "left",
-            "next_direction": "down",
-            "valid_count": 5,
-        },
-        {
-            "command": "direct_move_down",
-            "height": 30,
-        },
-        {
-            "command": "follow_line",
-            "direction": "left",
-            "next_direction": "up",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "up",
-            "next_direction": "left",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "left",
-            "next_direction": "up",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "up",
-            "next_direction": "left",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "left",
-            "next_direction": "down",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "down",
-            "next_direction": "left",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "left",
-            "next_direction": "aruco",
-            "valid_count": 1,
-        },
-        {"command": "follow_marker", "marker_id": 2, "distance": 50},
-        {"command": "turn_right"},
-        {"command": "follow_face", "valid_count": 5},
-        {"command": "forward", "valid_count": 300},
-        {"command": "turn_back"},
-        {"command": "follow_marker", "marker_id": 3, "distance": 150},
-        {"command": "land"},
-    ]
     action_all = [
         {"command": "up_until_marker"},
         {"command": "follow_marker", "marker_id": 1, "distance": 36},
@@ -879,52 +694,10 @@ def main():
         {"command": "land"},
     ]
 
-    # drone.send_control(0, 10, 0, 0)
     # active_actions = action_all
     # active_actions = actions_test
 
     drone.drone.takeoff()
-    # YOLOv7 detech object to decide which action to take
-
-    # WEIGHT = './best.pt'
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    # model = attempt_load(WEIGHT, map_location=device)
-    # if device == "cuda":
-    #     model = model.half().to(device)
-    # else:
-    #     model = model.float().to(device)
-    # names = model.module.names if hasattr(model, 'module') else model.names
-    # colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
-    # while len(active_actions) == 0:
-    #     image = drone.frame_read.frame
-    #     image_labeled = image.copy()
-
-    #     image = letterbox(image, (640, 640), stride=64, auto=True)[0]
-    #     if device == "cuda":
-    #         image = transforms.ToTensor()(image).to(device).half().unsqueeze(0)
-    #     else:
-    #         image = transforms.ToTensor()(image).to(device).float().unsqueeze(0)
-
-    #     with torch.no_grad():
-    #         output = model(image)[0]
-    #     output = non_max_suppression_kpt(output, conf_thres=0.25, iou_thres=0.65)[0]
-
-    #     output[:, :4] = scale_coords(image.shape[2:], output[:, :4], image_labeled.shape).round()
-    #     for *xyxy, conf, cls in output:
-    #         label = f'{names[int(cls)]} {conf:.2f}'
-    #         if names[int(cls)] == 'carna':
-    #             active_actions = actions_carna
-    #             break
-    #         elif names[int(cls)] == 'melody':
-    #             active_actions = actions_melody
-    #             break
-    #         plot_one_box(xyxy, image_labeled, label=label, color=colors[int(cls)], line_thickness=1)
-
-    #     cv2.waitKey(3)
-    #     cv2.imshow("YOLOv7", image_labeled)
-    #     cv2.destroyWindow("YOLOv7")
-
     while True:
         frame = drone.frame_read.frame
         key = cv2.waitKey(10)
