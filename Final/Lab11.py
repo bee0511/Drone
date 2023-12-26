@@ -8,7 +8,6 @@ from djitellopy import Tello
 from pyimagesearch.pid import PID
 from face_detect import FaceDetector
 from line_follow import LineFollow
-from Midterm import track_aruco
 
 # YOLOv7
 import torch
@@ -76,8 +75,6 @@ class Drone:
 
         # Line follower
         self.line_follower = LineFollow()
-
-        self.tracker = track_aruco()
 
         # Aruco marker
         self.dictionary = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
@@ -242,7 +239,6 @@ class Drone:
                 vertical_update = self._clamping(
                     self.y_pid.update(vertical_update, sleep=0)
                 )
-
                 print(
                     "[follow_marker] Target marker detected",
                     "h : ",
@@ -265,16 +261,16 @@ class Drone:
         print("[follow_marker] No marker detected, stay still!")
         return False, 0, 0, 0, 0
 
-    def follow_face(self) -> (bool, int, int, int, int):
+    def follow_face(self) -> (np.ndarray, bool, int, int, int, int):
         frame = self.frame_read.frame
         frame, dist = self.face_detector.detect(frame)
         if dist is None:
             cv2.putText(frame, "No face detected", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            return frame, False, 10, 0, 0, 0
-        if dist > self.face_detector.threshold:
+            return frame, False, 10, -5, 0, 0
+        if dist > self.face_detector.error:
             return frame, False, -5, 0, 0, 0
-        if dist < self.face_detector.threshold:
+        if dist < self.face_detector.error:
             return frame, False, 5, 0, 0, 0
         return frame, True, 0, 0, 0, 0
 
@@ -396,20 +392,6 @@ class Drone:
                         return
                     self.send_control(0, 0, -self.HAND_CONTROL_UD, 0)
             elif command == "follow_marker":
-                # if marker_id == 1:
-                #     packed_data = self.tracker.tracking_aruco(frame, marker_id, distance)
-                #     if not packed_data:
-                #         self.send_control(0, 0, 0, 0)
-                #         print ("No aruco")
-                #     else:
-                #         tagged_frame, x_update, y_update, z_update, yaw_update, ret_distance = packed_data
-                #         cv2.imshow("marker 1", tagged_frame)
-                #         self.send_control(x_update, z_update, y_update, yaw_update)
-                #         print("distance:", ret_distance)
-                #         if distance > ret_distance:
-                #             self.send_control(0,0 ,0,0)
-                #             return
-
                 is_success, x, z, y, yaw = self.follow_marker(
                     marker_id, distance)
                 if is_success:
@@ -430,6 +412,7 @@ class Drone:
                         return
                 else:
                     valid_count = tmp_valid_count
+                    print("Not success follow face!!!!! Reset valid_count")
                 cv2.putText(frame, f"x: {x}", (10, 30),
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 cv2.putText(frame, f"z: {z}", (10, 60),
@@ -572,6 +555,73 @@ def main():
         {"command": "follow_marker", "marker_id": 2, "distance": 50},
         {"command": "turn_right"},
         {"command": "follow_face", "valid_count": 5},
+        {"command": "land"},
+    ]
+
+    
+    actions_force_melody = [
+        {"command": "take_off"},
+        {"command": "up_until_marker"},
+        {"command": "follow_marker", "marker_id": 1, "distance": 36},
+        {
+            "command": "direct_move_up",
+            "height": 170,
+        },
+        {
+            "command": "direct_move_left",
+            "valid_count": 300,
+        },
+        {
+            "command": "direct_move_down",
+            "height": 30,
+        },
+        {
+            "command": "direct_move_left",
+            "valid_count": 400,
+        },
+        {
+            "command": "direct_move_up",
+            "height": 75,
+        },
+        {"command": "follow_marker", "marker_id": 2, "distance": 50},
+        {"command": "turn_right"},
+        {"command": "follow_face", "valid_count": 5},
+        {"command": "forward", "valid_count": 300},
+        {"command": "turn_back"},
+        {"command": "follow_marker", "marker_id": 3, "distance": 150},
+        {"command": "land"},
+    ]
+    
+    actions_force_carna = [
+        {"command": "take_off"},
+        {"command": "up_until_marker"},
+        {"command": "follow_marker", "marker_id": 1, "distance": 36},
+        {
+            "command": "direct_move_down",
+            "height": 30,
+        },
+        {
+            "command": "direct_move_left",
+            "valid_count": 400,
+        },
+        {
+            "command": "direct_move_up",
+            "height": 170,
+        },
+        {
+            "command": "direct_move_left",
+            "valid_count": 300,
+        },
+        {
+            "command": "direct_move_down",
+            "height": 75,
+        },
+        {"command": "follow_marker", "marker_id": 2, "distance": 50},
+        {"command": "turn_right"},
+        {"command": "follow_face", "valid_count": 5},
+        {"command": "forward", "valid_count": 300},
+        {"command": "turn_back"},
+        {"command": "follow_marker", "marker_id": 3, "distance": 150},
         {"command": "land"},
     ]
 

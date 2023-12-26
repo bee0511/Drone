@@ -9,6 +9,8 @@ class FaceDetector:
         self.focal_length = 650  # Set the focal length based on your camera specifications
         self.avg_face_width = 14  # Set the average width of a face in centimeters
         self.midpoint_offset = 5
+        self.error = 10
+        self.up_down_offset = 150
 
     def measureFaceDistance(self, face_width_pixels):
         return (self.avg_face_width * self.focal_length) / face_width_pixels
@@ -53,6 +55,7 @@ class FaceDetector:
         else:
             distance = None
         # put the distance on the frame
+        # print(distance)
         return frame, distance
 
     def detectFaces(self, frame):
@@ -62,31 +65,46 @@ class FaceDetector:
         # 儲存所有偵測到的人臉的中心點
         centers = []
 
+        # Get the height and width of the frame
+        height, width = frame.shape[:2]
+
+        # Calculate the center of the frame
+        center_y = height // 2
+
+        # Draw two red horizontal lines at center_y ± 150 pixels
+        cv2.line(frame, (0, center_y - self.up_down_offset), (width, center_y - self.up_down_offset), (0, 0, 255), 2)
+        cv2.line(frame, (0, center_y + self.up_down_offset), (width, center_y + self.up_down_offset), (0, 0, 255), 2)
+
         for x, y, w, h in faces:
-            # Draw a rectangle around the detected face
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 100, 255), 2)
+            # Calculate the center of the face
+            face_center_y = y + h // 2
 
-            # Calculate the width of the detected face in pixels
-            face_width_pixels = w
+            # If the center of the face is within center_y ± 150 pixels, add it to the list
+            if center_y - self.up_down_offset <= face_center_y <= center_y + self.up_down_offset:
+                # Draw a rectangle around the detected face
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 100, 255), 2)
 
-            # Measure the distance to the detected face
-            distance = self.measureFaceDistance(face_width_pixels)
+                # Calculate the width of the detected face in pixels
+                face_width_pixels = w
 
-            # Display the distance above the face rectangle
-            cv2.putText(
-                frame,
-                f"{distance:.2f} cm",
-                (x, y - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (255, 100, 255),
-                2,
-            )
+                # Measure the distance to the detected face
+                distance = self.measureFaceDistance(face_width_pixels)
 
-            # Calculate the center of the face and add it to the list
-            center_x = x + w // 2
-            center_y = y + h // 2
-            centers.append((center_x, center_y))
+                # Display the distance above the face rectangle
+                cv2.putText(
+                    frame,
+                    f"{distance:.2f} cm",
+                    (x, y - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (255, 100, 255),
+                    2,
+                )
+
+                # Add the center of the face to the list
+                center_x = x + w // 2
+                centers.append((center_x, face_center_y))
+
         return frame, centers
 
     def detect(self, frame):
@@ -109,8 +127,8 @@ class FaceDetector:
 
 if __name__ == "__main__":
     detector = FaceDetector()
-    for i in range(32, 60):
-        img_path = "./saved_images/saved_" + str(i) + ".png"
+    for i in range(1, 130):
+        img_path = "./saved_images1/saved_" + str(i) + ".png"
         frame = cv2.imread(img_path)
         # frame, centers = detector.detectFaces(frame)
         # frame = detector.drawTwoFaceCenter(frame, centers)
