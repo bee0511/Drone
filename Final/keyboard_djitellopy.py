@@ -1,7 +1,7 @@
 def keyboard(self, key):
     # global is_flying
     # print("key:", key)
-    fb_speed = 15
+    fb_speed = 20
     lf_speed = 20
     ud_speed = 30
     degree = 30

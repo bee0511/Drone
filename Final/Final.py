@@ -57,7 +57,7 @@ class Drone:
     SCALING_FACTOR_H = 0.2
     SCALING_FACTOR_Y = 0.4
     SCALING_FACTOR_Z = 0.3
-    HAND_CONTROL_FB = 20    # Front and back
+    HAND_CONTROL_FB = 30    # Front and back
     HAND_CONTROL_LR = 20    # Left and right
     HAND_CONTROL_UD = 35    # Up and down
     init = True
@@ -141,6 +141,8 @@ class Drone:
                 return frame, False, 0, -self.line_follower.FB_SPD, self.line_follower.UD_SPD, 0
             if cur_direction == "down":
                 return frame, False, 0, -self.line_follower.FB_SPD, -self.line_follower.UD_SPD, 0
+            if cur_direction == "left_table":
+                return frame, False, -self.line_follower.LR_SPD, 0, 0, 0
 
         if cur_direction == "right" and next_direction == "down":
             if detect_array[3]:
@@ -178,7 +180,11 @@ class Drone:
             frame, markerIds = self.find_marker()
             if markerIds is not None:
                 return frame, True, 0, 0, 0, 0
-            return frame, False, -self.line_follower.LR_SPD, -self.line_follower.FB_SPD, 0, 0
+            return frame, False, -self.line_follower.LR_SPD, -10, 0, 0
+        elif cur_direction == "left_table" and next_direction == "up_table":
+            if detect_array[2]:
+                return frame, True, 0, 0, 0, 0
+            return frame, False, -self.line_follower.LR_SPD, 0, 0, 0
         else:
             print("[follow_line] Invalid direction:",
                   cur_direction, next_direction)
@@ -274,9 +280,9 @@ class Drone:
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             return frame, False, 10, -5, 0, 0
         if dist > self.face_detector.error:
-            return frame, False, -5, 0, 0, 0
+            return frame, False, -7, 0, 0, 0
         if dist < -self.face_detector.error:
-            return frame, False, 5, 0, 0, 0
+            return frame, False, 7, 0, 0, 0
         return frame, True, 0, 0, 0, 0
 
     def find_marker(self) -> list[int]:
@@ -314,17 +320,17 @@ class Drone:
             # DONT WRITE LOOPS INSIDE THIS CONDITION CHAIN
             if key != -1:
                 print(key)
-                if key != ord("z"):
-                    self.interrupted_flag = True
-                if key == ord("p"):
-                    self.interrupted_flag = False
-                else:
-                    keyboard_djitellopy.keyboard(self.drone, key)
-            if self.interrupted_flag == True:
-                self.send_control(0, 0, 0, 0)
-                cv2.putText(frame, "Interrupted", (10, 150),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                continue
+                # if key != ord("z") and key != ord("m") and key != ord("n") and key != ord("p") and key != ord("w"):
+                #     self.interrupted_flag = True
+                # if key == ord("p"):
+                #     self.interrupted_flag = False
+                # else:
+                keyboard_djitellopy.keyboard(self.drone, key)
+            # if self.interrupted_flag == True:
+            #     self.send_control(0, 0, 0, 0)
+            #     cv2.putText(frame, "Interrupted", (10, 150),
+            #                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            #     continue
             elif command == "take_off":
                 self.drone.takeoff()
                 return
@@ -335,7 +341,7 @@ class Drone:
                 self.drone.rotate_clockwise(90)
                 return
             elif command == "turn_back":
-                self.drone.rotate_clockwise(180)
+                self.drone.rotate_counter_clockwise(180)
                 return
             elif command == "stop":
                 self.send_control(0, 0, 0, 0)
@@ -349,10 +355,10 @@ class Drone:
                     return
                 self.send_control(0, self.HAND_CONTROL_FB, 0, 0)
             elif command == "up_until_marker":
-                # self.send_control(0, 0, 10, 0)
+                self.send_control(0, 0, 0, 0)
                 frame, marker_ids = self.find_marker()
                 print(marker_ids)
-                if marker_ids is not None and marker_id in marker_ids:
+                if marker_ids is not None:
                     self.send_control(0, 0, 0, 0)
                     return
             elif command == "direct_move_left":
@@ -421,22 +427,30 @@ class Drone:
             elif command == "follow_line":
                 if self.init == True:
                     self.time_cnt += self.wait_key_interval
-                    if next_direction == "down":
-                        if self.time_cnt > 1000:
+                    if direction == "left" and next_direction == "up":
+                        if self.time_cnt > 100:
                             self.init = False
                             self.time_cnt = 0
-                    elif direction == "left" and next_direction == "up":
-                        if self.time_cnt > 2000:
+                    elif direction == "left" and next_direction == "down":
+                        if self.time_cnt > 100:
+                            self.init = False
+                            self.time_cnt = 0
+                    elif direction == "up" and next_direction == "left":
+                        if self.time_cnt > 500:
+                            self.init = False
+                            self.time_cnt = 0
+                    elif direction == "left_table" and next_direction == "up_table":
+                        if self.time_cnt > 4000:
                             self.init = False
                             self.time_cnt = 0
                     else:
-                        if self.time_cnt > 500:
+                        if self.time_cnt > 300:
                             self.init = False
                             self.time_cnt = 0
                 frame, is_success, x, z, y, yaw = self.follow_line(
                     direction, next_direction)
                 cv2.putText(frame, f"timer: {self.time_cnt}", (150, 500),
-                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 if is_success:
                     valid_count -= 1
                     self.send_control(0, 0, 0, 0)
@@ -470,89 +484,91 @@ def main():
     # 0:left, 1:up, 2:right, 3:down
     # line ['line', [0123], [line_position]] 離牆30
     actions_test = [
-        {"command": "take_off"},
-        {"command": "up_until_marker", "marker_id": 0},
-        {"command": "follow_marker", "marker_id": 0, "distance": 50},
-        
-        {"command": "stop"},
-        {"command": "land"},
-    ]
-    
-    actions_melody = [
-        {"command": "take_off"},
-        {"command": "up_until_marker"},
-        {"command": "follow_marker", "marker_id": 1, "distance": 36},
-        {
-            "command": "follow_line",
-            "direction": "up",
-            "next_direction": "left",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "left",
-            "next_direction": "up",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "up",
-            "next_direction": "left",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "left",
-            "next_direction": "down",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "down",
-            "next_direction": "left",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "left",
-            "next_direction": "down",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "down",
-            "next_direction": "left",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "left",
-            "next_direction": "up",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "up",
-            "next_direction": "left",
-            "valid_count": 1,
-        },
-        {
-            "command": "follow_line",
-            "direction": "left",
-            "next_direction": "aruco",
-            "valid_count": 1,
-        },
-        {"command": "follow_marker", "marker_id": 2, "distance": 50},
+        {"command": "up_until_marker", "marker_id": 2},
+        {"command": "follow_marker", "marker_id": 2, "distance": 305},
         {"command": "turn_right"},
-        {"command": "follow_face", "valid_count": 5},
-        {"command": "forward", "valid_count": 300},
+        # {"command": "follow_face", "valid_count": 1},
+        {"command": "forward", "valid_count": 500},
         {"command": "turn_back"},
         {"command": "follow_marker", "marker_id": 3, "distance": 150},
         {"command": "land"},
     ]
 
+    actions_melody = [
+        {"command": "forward", "valid_count": 600},
+        {"command": "up_until_marker"},
+        {"command": "follow_marker", "marker_id": 1, "distance": 36},
+        {
+            "command": "follow_line",
+            "direction": "up",
+            "next_direction": "left",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "up",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "up",
+            "next_direction": "left",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "down",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "down",
+            "next_direction": "left",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "down",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "down",
+            "next_direction": "left",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left_table",
+            "next_direction": "up_table",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "up",
+            "next_direction": "left",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "aruco",
+            "valid_count": 1,
+        },
+        {"command": "follow_marker", "marker_id": 2, "distance": 305},
+        {"command": "turn_right"},
+        # {"command": "follow_face", "valid_count": 5},
+        {"command": "forward", "valid_count": 400},
+        {"command": "turn_back"},
+        {"command": "follow_marker", "marker_id": 3, "distance": 155},
+        {"command": "land"},
+    ]
+
     actions_carna = [
-        {"command": "take_off"},
+        {"command": "forward", "valid_count": 600},
         {"command": "up_until_marker"},
         {"command": "follow_marker", "marker_id": 1, "distance": 36},
         {
@@ -575,8 +591,8 @@ def main():
         },
         {
             "command": "follow_line",
-            "direction": "left",
-            "next_direction": "up",
+            "direction": "left_table",
+            "next_direction": "up_table",
             "valid_count": 1,
         },
         {
@@ -615,15 +631,15 @@ def main():
             "next_direction": "aruco",
             "valid_count": 1,
         },
-        {"command": "follow_marker", "marker_id": 2, "distance": 50},
+        {"command": "follow_marker", "marker_id": 2, "distance": 305},
         {"command": "turn_right"},
-        {"command": "follow_face", "valid_count": 5},
-        {"command": "forward", "valid_count": 300},
+        # {"command": "follow_face", "valid_count": 5},
+        {"command": "forward", "valid_count": 400},
         {"command": "turn_back"},
-        {"command": "follow_marker", "marker_id": 3, "distance": 150},
+        {"command": "follow_marker", "marker_id": 3, "distance": 155},
         {"command": "land"},
     ]
-    
+
     actions_test_melody = [
         {"command": "take_off"},
         {"command": "up_until_marker"},
@@ -696,7 +712,7 @@ def main():
         {"command": "follow_marker", "marker_id": 3, "distance": 150},
         {"command": "land"},
     ]
-    
+
     actions_test_carna = [
         {"command": "take_off"},
         {"command": "up_until_marker"},
@@ -767,48 +783,162 @@ def main():
         {"command": "follow_marker", "marker_id": 3, "distance": 150},
         {"command": "land"},
     ]
+    action_all = [
+        {"command": "up_until_marker"},
+        {"command": "follow_marker", "marker_id": 1, "distance": 36},
+        {
+            "command": "follow_line",
+            "direction": "up",
+            "next_direction": "left",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "up",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "up",
+            "next_direction": "left",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "down",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "down",
+            "next_direction": "left",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "down",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "down",
+            "next_direction": "left",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left_table",
+            "next_direction": "up_table",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "up",
+            "next_direction": "left",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "up",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "up",
+            "next_direction": "left",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "down",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "down",
+            "next_direction": "left",
+            "valid_count": 1,
+        },
+        {
+            "command": "follow_line",
+            "direction": "left",
+            "next_direction": "aruco",
+            "valid_count": 1,
+        },
+        {"command": "follow_marker", "marker_id": 2, "distance": 305},
+        {"command": "turn_right"},
+        # {"command": "follow_face", "valid_count": 5},
+        {"command": "forward", "valid_count": 400},
+        {"command": "turn_back"},
+        {"command": "follow_marker", "marker_id": 3, "distance": 155},
+        {"command": "land"},
+    ]
 
-    # actions = actions_test
+    # drone.send_control(0, 10, 0, 0)
+    # active_actions = action_all
+    # active_actions = actions_test
 
+    drone.drone.takeoff()
     # YOLOv7 detech object to decide which action to take
-    WEIGHT = './best.pt'
-    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    model = attempt_load(WEIGHT, map_location=device)
-    if device == "cuda":
-        model = model.half().to(device)
-    else:
-        model = model.float().to(device)
-    names = model.module.names if hasattr(model, 'module') else model.names
-    colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
-    while len(active_actions) == 0:
-        image = drone.frame_read.frame
-        image_labeled = image.copy()
+    # WEIGHT = './best.pt'
+    # device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        image = letterbox(image, (640, 640), stride=64, auto=True)[0]
-        if device == "cuda":
-            image = transforms.ToTensor()(image).to(device).half().unsqueeze(0)
+    # model = attempt_load(WEIGHT, map_location=device)
+    # if device == "cuda":
+    #     model = model.half().to(device)
+    # else:
+    #     model = model.float().to(device)
+    # names = model.module.names if hasattr(model, 'module') else model.names
+    # colors = [[random.randint(0, 255) for _ in range(3)] for _ in names]
+    # while len(active_actions) == 0:
+    #     image = drone.frame_read.frame
+    #     image_labeled = image.copy()
+
+    #     image = letterbox(image, (640, 640), stride=64, auto=True)[0]
+    #     if device == "cuda":
+    #         image = transforms.ToTensor()(image).to(device).half().unsqueeze(0)
+    #     else:
+    #         image = transforms.ToTensor()(image).to(device).float().unsqueeze(0)
+
+    #     with torch.no_grad():
+    #         output = model(image)[0]
+    #     output = non_max_suppression_kpt(output, conf_thres=0.25, iou_thres=0.65)[0]
+
+    #     output[:, :4] = scale_coords(image.shape[2:], output[:, :4], image_labeled.shape).round()
+    #     for *xyxy, conf, cls in output:
+    #         label = f'{names[int(cls)]} {conf:.2f}'
+    #         if names[int(cls)] == 'carna':
+    #             active_actions = actions_carna
+    #             break
+    #         elif names[int(cls)] == 'melody':
+    #             active_actions = actions_melody
+    #             break
+    #         plot_one_box(xyxy, image_labeled, label=label, color=colors[int(cls)], line_thickness=1)
+
+    #     cv2.waitKey(3)
+    #     cv2.imshow("YOLOv7", image_labeled)
+    #     cv2.destroyWindow("YOLOv7")
+
+    while True:
+        frame = drone.frame_read.frame
+        key = cv2.waitKey(10)
+        cv2.imshow("frame", frame)
+        if key == ord("n"):
+            active_actions = actions_carna
+            print("action set to carna")
+            break
+        elif key == ord("m"):
+            active_actions = actions_melody
+            print("action set to melody")
+            break
         else:
-            image = transforms.ToTensor()(image).to(device).float().unsqueeze(0)
-
-        with torch.no_grad():
-            output = model(image)[0]
-        output = non_max_suppression_kpt(output, conf_thres=0.25, iou_thres=0.65)[0]
-
-        output[:, :4] = scale_coords(image.shape[2:], output[:, :4], image_labeled.shape).round()
-        for *xyxy, conf, cls in output:
-            label = f'{names[int(cls)]} {conf:.2f}'
-            if names[int(cls)] == 'carna':
-                active_actions = actions_carna
-                break
-            elif names[int(cls)] == 'melody':
-                active_actions = actions_melody
-                break
-            plot_one_box(xyxy, image_labeled, label=label, color=colors[int(cls)], line_thickness=1)
-
-        cv2.waitKey(3)
-        cv2.imshow("YOLOv7", image_labeled)
-        cv2.destroyWindow("YOLOv7")
+            print("Invalid key!")
 
     for action in active_actions:
         print("[Main loop] current_action:", action)

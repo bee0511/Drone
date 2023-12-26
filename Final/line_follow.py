@@ -13,9 +13,9 @@ class LineFollow:
         self.otsu = OtsuThreshold()
         self.borders = [False, False, False, False]  # Left, Right, Top, Bottom
         self.LR_SPD = 10  # left right speed
-        self.FB_SPD = 3  # forward backward speed
+        self.FB_SPD = 2  # forward backward speed
         self.UD_SPD = 20  # up down speed
-        self.black_threshold = self.border_length * self.border_thickness * 0.5
+        self.black_threshold = self.border_length * self.border_thickness * 0.4
 
     def drawBoarder(self, frame):
         height, width = frame.shape

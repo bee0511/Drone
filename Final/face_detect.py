@@ -10,7 +10,7 @@ class FaceDetector:
         self.avg_face_width = 14  # Set the average width of a face in centimeters
         self.midpoint_offset = 5
         self.error = 10
-        self.up_down_offset = 150
+        self.up_down_offset = 100
 
     def measureFaceDistance(self, face_width_pixels):
         return (self.avg_face_width * self.focal_length) / face_width_pixels
