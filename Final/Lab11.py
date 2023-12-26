@@ -8,6 +8,7 @@ from djitellopy import Tello
 from pyimagesearch.pid import PID
 from face_detect import FaceDetector
 from line_follow import LineFollow
+from Midterm import track_aruco
 
 # YOLOv7
 import torch
@@ -76,6 +77,8 @@ class Drone:
         # Line follower
         self.line_follower = LineFollow()
 
+        self.tracker = track_aruco()
+
         # Aruco marker
         self.dictionary = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_250)
         self.parameters = cv2.aruco.DetectorParameters_create()
@@ -129,11 +132,18 @@ class Drone:
         cv2.putText(frame, f"next: {next_direction}", (100, 60),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
-        if not any(detect_array):
-            return frame, False, 0, 0, 0, 0
+        # if not any(detect_array):
+        #     return frame, False, 0, 0, 0, 0
 
-        if self.init == True:  # init, up -> left
-            return frame, False, 0, 0, self.line_follower.UD_SPD, 0
+        if self.init == True:
+            if cur_direction == "right":
+                return frame, False, self.line_follower.LR_SPD, -self.line_follower.FB_SPD, 0, 0
+            if cur_direction == "left":
+                return frame, False, -self.line_follower.LR_SPD, -self.line_follower.FB_SPD, 0, 0
+            if cur_direction == "up":
+                return frame, False, 0, -self.line_follower.FB_SPD, self.line_follower.UD_SPD, 0
+            if cur_direction == "down":
+                return frame, False, 0, -self.line_follower.FB_SPD, -self.line_follower.UD_SPD, 0
 
         if cur_direction == "right" and next_direction == "down":
             if detect_array[3]:
@@ -171,7 +181,7 @@ class Drone:
             print("[follow_line] Invalid direction:",
                   cur_direction, next_direction)
 
-    def follow_marker(self, marker_id, distance) -> (np.ndarray, bool, int, int, int, int):
+    def follow_marker(self, marker_id, distance) -> (bool, int, int, int, int):
         """
         :param marker_id: The id of the marker to follow
         :param distance: The distance to keep from the marker
@@ -185,9 +195,10 @@ class Drone:
             markerCorners, 15, self.intrinsic, self.distortion
         )
         frame = cv2.aruco.drawDetectedMarkers(frame, markerCorners, markerIds)
+        cv2.imshow("frame", frame)
 
         if np.array(rvec).ndim == 0:
-            return frame, False, 0, 0, 0, 0
+            return False, 0, 0, 0, 0
 
         frame_width, frame_height = frame.shape[1], frame.shape[0]
 
@@ -217,25 +228,33 @@ class Drone:
                     and yaw_angle > -15
                 ):
                     return (
-                        frame,
                         True,
                         int(horizontal_update),
                         int(z_update // 2),
                         int(vertical_update // 2),
-                        int(yaw_control),
+                        self._clamping(int(yaw_control)),
                     )
 
                 z_update = self._clamping(self.z_pid.update(z_update, sleep=0))
                 horizontal_update = self._clamping(
-                    self.h_pid.update(horizontal_update, sleep=0))
+                    self.h_pid.update(horizontal_update, sleep=0)
+                )
                 vertical_update = self._clamping(
-                    self.y_pid.update(vertical_update, sleep=0))
+                    self.y_pid.update(vertical_update, sleep=0)
+                )
 
-                text = f"[follow_marker] Target marker detected h : {horizontal_update} f : {z_update} v : {vertical_update} r : {yaw_control}"
-                cv2.putText(frame, text, (10, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                print(
+                    "[follow_marker] Target marker detected",
+                    "h : ",
+                    horizontal_update,
+                    "f : ",
+                    z_update,
+                    "v : ",
+                    vertical_update,
+                    "r : ",
+                    yaw_control,
+                )
                 return (
-                    frame,
                     False,
                     int(horizontal_update),
                     int(z_update // 2),
@@ -244,7 +263,7 @@ class Drone:
                 )
 
         print("[follow_marker] No marker detected, stay still!")
-        return frame, False, 0, 0, 0, 0
+        return False, 0, 0, 0, 0
 
     def follow_face(self) -> (bool, int, int, int, int):
         frame = self.frame_read.frame
@@ -252,11 +271,11 @@ class Drone:
         if dist is None:
             cv2.putText(frame, "No face detected", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-            return frame, False, 0, 0, 0, 0
+            return frame, False, 10, 0, 0, 0
         if dist > self.face_detector.threshold:
-            return frame, False, 0, 0, 0, 5
+            return frame, False, -5, 0, 0, 0
         if dist < self.face_detector.threshold:
-            return frame, False, 0, 0, 0, -5
+            return frame, False, 5, 0, 0, 0
         return frame, True, 0, 0, 0, 0
 
     def find_marker(self) -> list[int]:
@@ -286,20 +305,20 @@ class Drone:
         tmp_valid_count = valid_count
         while True:
             frame = self.frame_read.frame
+            # put command on screen
+            cv2.putText(frame, f"command: {command}", (10, 150),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             key = cv2.waitKey(self.wait_key_interval)
-            if self.init == True:
-                self.time_cnt += self.wait_key_interval
-                if self.time_cnt > 2000:
-                    self.init = False
-                    self.time_cnt = 0
 
             # DONT WRITE LOOPS INSIDE THIS CONDITION CHAIN
             if key != -1:
                 print(key)
-                self.interrupted_flag = True
+                if key != ord("z"):
+                    self.interrupted_flag = True
                 if key == ord("p"):
                     self.interrupted_flag = not self.interrupted_flag
-                keyboard_djitellopy.keyboard(self.drone, key)
+                else:
+                    keyboard_djitellopy.keyboard(self.drone, key)
             elif command == "take_off":
                 self.drone.takeoff()
                 return
@@ -326,6 +345,7 @@ class Drone:
             elif command == "up_until_marker":
                 # self.send_control(0, 0, 10, 0)
                 frame, marker_ids = self.find_marker()
+                print(marker_ids)
                 if marker_ids:
                     self.send_control(0, 0, 0, 0)
                     return
@@ -376,17 +396,22 @@ class Drone:
                         return
                     self.send_control(0, 0, -self.HAND_CONTROL_UD, 0)
             elif command == "follow_marker":
-                frame, is_success, x, z, y, yaw = self.follow_marker(
+                # if marker_id == 1:
+                #     packed_data = self.tracker.tracking_aruco(frame, marker_id, distance)
+                #     if not packed_data:
+                #         self.send_control(0, 0, 0, 0)
+                #         print ("No aruco")
+                #     else:
+                #         tagged_frame, x_update, y_update, z_update, yaw_update, ret_distance = packed_data
+                #         cv2.imshow("marker 1", tagged_frame)
+                #         self.send_control(x_update, z_update, y_update, yaw_update)
+                #         print("distance:", ret_distance)
+                #         if distance > ret_distance:
+                #             self.send_control(0,0 ,0,0)
+                #             return
+
+                is_success, x, z, y, yaw = self.follow_marker(
                     marker_id, distance)
-                # Put x, z, y, yaw on the frame
-                cv2.putText(frame, f"x: {x}", (10, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                cv2.putText(frame, f"z: {z}", (10, 60),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                cv2.putText(frame, f"y: {y}", (10, 90),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                cv2.putText(frame, f"yaw: {yaw}", (10, 120),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 if is_success:
                     print("Success follow marker!!!!!")
                     self.send_control(0, 0, 0, 0)
@@ -415,6 +440,16 @@ class Drone:
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 self.send_control(x, z, y, yaw)
             elif command == "follow_line":
+                if self.init == True:
+                    self.time_cnt += self.wait_key_interval
+                    if next_direction != "down":
+                        if self.time_cnt > 400:
+                            self.init = False
+                            self.time_cnt = 0
+                    else:
+                        if self.time_cnt > 1000:
+                            self.init = False
+                            self.time_cnt = 0
                 frame, is_success, x, z, y, yaw = self.follow_line(
                     direction, next_direction)
 
@@ -424,6 +459,7 @@ class Drone:
                     cv2.putText(frame, f"valid_count: {valid_count}", (10, 150),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                     if valid_count == 0:
+                        self.init = True
                         return
                 else:
                     valid_count = tmp_valid_count
@@ -452,15 +488,15 @@ def main():
     actions_test = [
         {"command": "take_off"},
         {"command": "up_until_marker"},
-        {"command": "follow_marker", "marker_id": 0, "distance": 50},
-        {"command": "direct_move_left", "valid_count": 50},
+        {"command": "follow_marker", "marker_id": 1, "distance": 50},
+        # {"command": "direct_move_left", "valid_count": 150},
         {"command": "stop"},
         {"command": "land"},
     ]
     actions_lab10 = [
         {"command": "take_off"},
         {"command": "up_until_marker"},
-        {"command": "follow_marker", "marker_id": 3, "distance": 36},
+        {"command": "follow_marker", "marker_id": 1, "distance": 36},
         {
             "command": "follow_line",
             "direction": "right",
@@ -530,7 +566,16 @@ def main():
         {"command": "land"},
     ]
 
-    active_actions = actions_test
+    actions_from_stage_2 = [
+        {"command": "take_off"},
+        {"command": "up_until_marker"},
+        {"command": "follow_marker", "marker_id": 2, "distance": 50},
+        {"command": "turn_right"},
+        {"command": "follow_face", "valid_count": 5},
+        {"command": "land"},
+    ]
+
+    active_actions = actions_from_stage_2
 
     # YOLOv7 detech object to decide which action to take
     # WEIGHT = './best.pt'

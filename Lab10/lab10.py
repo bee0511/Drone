@@ -663,7 +663,7 @@ def main():
     actions_lab10 = [
         {"command": "take_off"},
         {"command": "up_until_marker"},
-        {"command": "follow_marker", "marker_id": 3, "distance": 36},
+        {"command": "follow_marker", "marker_id": 1, "distance": 36},
         {
             "command": "follow_line",
             "direction": "right",

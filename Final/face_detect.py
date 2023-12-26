@@ -99,10 +99,10 @@ class FaceDetector:
             np.array: the modified frame
             float: the distance between the center of the frame and the center of the faces
         """
-        frame, centers = detector.detectFaces(frame)
-        frame = detector.drawTwoFaceCenter(frame, centers)
-        frame = detector.drawImgCenter(frame)
-        frame, dist = detector.calculateDistance(frame, centers)
+        frame, centers = self.detectFaces(frame)
+        frame = self.drawTwoFaceCenter(frame, centers)
+        frame = self.drawImgCenter(frame)
+        frame, dist = self.calculateDistance(frame, centers)
 
         return frame, dist
 
