@@ -10,7 +10,7 @@ from enum import Enum
 
 
 MAX_SPEED_THRESHOLD = 30
-CALIBRATE_FILE = "calibrate-best.xml"
+CALIBRATE_FILE = "calibrate-01.xml"
 
 pid_controller_x = PID(kP=0.7, kI=0.0001, kD=0.1)
 pid_controller_y = PID(kP=0.5, kI=0.0001, kD=0.1)

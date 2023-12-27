@@ -1,16 +1,16 @@
 def keyboard(self, key):
-    #global is_flying
+    # global is_flying
     # print("key:", key)
-    fb_speed = 40
-    lf_speed = 40
-    ud_speed = 50
+    fb_speed = 10
+    lf_speed = 20
+    ud_speed = 30
     degree = 30
     if key == ord('1'):
         self.takeoff()
-        #is_flying = True
+        # is_flying = True
     if key == ord('2'):
         self.land()
-        #is_flying = False
+        # is_flying = False
     if key == ord('3'):
         self.send_rc_control(0, 0, 0, 0)
         print("stop!!!!")
@@ -30,17 +30,17 @@ def keyboard(self, key):
         self.send_rc_control(0, 0, ud_speed, 0)
         print("down!!!!")
     if key == ord('x'):
-        self.send_rc_control(0, 0, (-1) *ud_speed, 0)
+        self.send_rc_control(0, 0, (-1) * ud_speed, 0)
         print("up!!!!")
     if key == ord('c'):
         self.send_rc_control(0, 0, 0, degree)
         print("rotate!!!!")
     if key == ord('v'):
-        self.send_rc_control(0, 0, 0, (-1) *degree)
+        self.send_rc_control(0, 0, 0, (-1) * degree)
         print("counter rotate!!!!")
     if key == ord('5'):
         height = self.get_height()
         print(height)
     if key == ord('6'):
         battery = self.get_battery()
-        print (battery)
+        print(battery)
